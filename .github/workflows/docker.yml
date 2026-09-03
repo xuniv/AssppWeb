@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  # Lets the workflow be started by hand from the Actions tab, so an image can
+  # be rebuilt without pushing a commit.
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
