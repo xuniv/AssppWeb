@@ -14,6 +14,13 @@ vi.mock("../../src/apple/bag", () => ({
     "https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate",
 }));
 
+// The SAP signer runs in a Web Worker, which jsdom does not provide. This test
+// is about the guid query, so stand the signer down rather than emulate it.
+vi.mock("../../src/apple/sap/client", () => ({
+  prepareSigner: vi.fn().mockResolvedValue(undefined),
+  signAction: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+}));
+
 describe("apple/authenticate", () => {
   beforeEach(() => {
     vi.clearAllMocks();
