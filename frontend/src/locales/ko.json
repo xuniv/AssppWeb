@@ -440,7 +440,10 @@
       "missingVersion": "필요한 버전 정보가 없습니다",
       "invalidSinf": "잘못된 sinf 항목입니다",
       "noSinf": "응답에서 sinf를 찾을 수 없습니다",
-      "tooManyRedirects": "리디렉션이 너무 많습니다"
+      "tooManyRedirects": "리디렉션이 너무 많습니다",
+      "versionLookupFailed": "대체 다운로드에 필요한 앱의 최신 버전을 확인하지 못했습니다",
+      "unexpectedResponse": "Apple에서 예상하지 못한 응답을 받았습니다 (HTTP {{status}})",
+      "fallbackMismatch": "Apple이 요청한 것과 다른 앱 또는 버전을 반환했습니다"
     },
     "purchase": {
       "paidNotSupported": "유료 앱 구매는 지원되지 않습니다",

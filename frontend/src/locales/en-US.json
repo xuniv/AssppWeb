@@ -440,7 +440,10 @@
       "missingVersion": "Missing required version information",
       "invalidSinf": "Invalid sinf item",
       "noSinf": "No sinf found in response",
-      "tooManyRedirects": "Too many redirects"
+      "tooManyRedirects": "Too many redirects",
+      "versionLookupFailed": "Could not determine the latest version of this app for the fallback download",
+      "unexpectedResponse": "Unexpected response from Apple (HTTP {{status}})",
+      "fallbackMismatch": "Apple returned a different app or version than requested"
     },
     "purchase": {
       "paidNotSupported": "Purchasing paid apps is not supported",

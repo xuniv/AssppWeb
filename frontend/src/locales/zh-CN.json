@@ -440,7 +440,10 @@
       "missingVersion": "缺少所需的版本信息",
       "invalidSinf": "无效的 sinf 项目",
       "noSinf": "响应中未找到 sinf",
-      "tooManyRedirects": "重定向次数过多"
+      "tooManyRedirects": "重定向次数过多",
+      "versionLookupFailed": "无法获取备用下载所需的应用最新版本",
+      "unexpectedResponse": "Apple 返回了意外的响应 (HTTP {{status}})",
+      "fallbackMismatch": "Apple 返回的应用或版本与请求不一致"
     },
     "purchase": {
       "paidNotSupported": "不支持购买付费应用",
