@@ -152,10 +152,19 @@ export function storeAPIHost(pod?: string): string {
 }
 
 // The volumeStore endpoint intermittently rejects requests with failureType
-// 5002. The legacy redownload dispatch endpoint serves the same payload and is
-// used as a fallback. The two endpoints name the external version id
-// differently in the request payload.
+// 5002, and for builds published since 2026-09 it can answer with an empty
+// songList. The download dispatch endpoints (redownload, then updateProduct)
+// serve the same payload and are used as fallbacks. The two endpoint families
+// name the external version id differently in the request payload.
 export const RETRYABLE_FAILURE_TYPE = "5002";
+
+export const DOWNLOAD_DISPATCH_HOST = "downloaddispatch.itunes.apple.com";
+
+// Public MDM catalog lookup used to pin the latest version before a dispatch
+// fallback. Catalogs are tried in order: some storefronts have no enterprise
+// listing even when the consumer catalogs contain the app.
+export const VERSION_LOOKUP_HOST = "uclient-api.itunes.apple.com";
+export const VERSION_LOOKUP_CATALOGS = ["enterprisestore", "iphone", "ipad"];
 
 export interface StoreDownloadEndpoint {
   host: string;
@@ -176,8 +185,18 @@ export function volumeStoreEndpoint(
 
 export function redownloadEndpoint(deviceId: string): StoreDownloadEndpoint {
   return {
-    host: "downloaddispatch.itunes.apple.com",
+    host: DOWNLOAD_DISPATCH_HOST,
     path: `/r/redownload?guid=${deviceId}`,
+    externalVersionIdKey: "appExtVrsId",
+  };
+}
+
+export function updateProductEndpoint(
+  deviceId: string,
+): StoreDownloadEndpoint {
+  return {
+    host: DOWNLOAD_DISPATCH_HOST,
+    path: `/up/updateProduct?guid=${deviceId}`,
     externalVersionIdKey: "appExtVrsId",
   };
 }

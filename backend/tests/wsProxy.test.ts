@@ -3,6 +3,7 @@ import { createServer, Server } from "http";
 import net from "net";
 import { WebSocket } from "ws";
 import express from "express";
+import { server as wisp } from "@mercuryworkshop/wisp-js/server";
 import { setupWsProxy } from "../src/services/wsProxy.js";
 
 let httpServer: Server | null = null;
@@ -84,5 +85,17 @@ describe("Wisp Proxy", () => {
     });
 
     expect(rejected).toBe(true);
+  });
+
+  it("should allow only the Apple hosts the client protocol needs", () => {
+    const whitelist = wisp.options.hostname_whitelist as RegExp[];
+    const allowed = (host: string) => whitelist.some((re) => re.test(host));
+
+    expect(allowed("p18-buy.itunes.apple.com")).toBe(true);
+    expect(allowed("downloaddispatch.itunes.apple.com")).toBe(true);
+    expect(allowed("uclient-api.itunes.apple.com")).toBe(true);
+    expect(allowed("evil-uclient-api.itunes.apple.com")).toBe(false);
+    expect(allowed("uclient-api.itunes.apple.com.example.com")).toBe(false);
+    expect(allowed("apps.apple.com")).toBe(false);
   });
 });

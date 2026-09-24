@@ -107,7 +107,8 @@ The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/
 - `buy.itunes.apple.com` — purchase endpoint
 - `init.itunes.apple.com` — bag endpoint
 - `/^p\d+-buy\.itunes\.apple\.com$/` — pod-based hosts
-- `downloaddispatch.itunes.apple.com` — redownload dispatch endpoint (failureType 5002 fallback)
+- `downloaddispatch.itunes.apple.com` — download dispatch endpoints (`/r/redownload`, then `/up/updateProduct`) used when volumeStore answers failureType 5002, an empty response, or "No Longer Available"
+- `uclient-api.itunes.apple.com` — public MDM catalog lookup (no cookies or DSID) that pins the latest external version id before a dispatch fallback
 - Port restricted to `443` only
 - Direct IP targets blocked (`allow_direct_ip = false`)
 - Loopback IP targets blocked (`allow_loopback_ips = false`)
@@ -209,6 +210,8 @@ The settings endpoint (`/api/settings`) must never reflect request headers (`x-f
 - `2034` / `2042`: Token expired — re-authentication required
 - `customerMessage === 'Your password has changed.'`: Password token invalid
 - `action.url` ending in `termsPage`: Terms acceptance required (throw with URL)
+- `5002`, or an HTTP 200 with no `failureType`, no `customerMessage` and no `songList` (or a message-only "No Longer Available"): download fallback chain in `frontend/src/apple/downloadProduct.ts` — pin the version via the catalog lookup (enterprisestore → iphone → ipad), retry `/r/redownload`, then `/up/updateProduct` on an empty HTTP 500 or another empty/unavailable answer. updateProduct items are validated against the requested app id, version and bundle id
+- Message-only responses without items surface Apple's `customerMessage` instead of the generic "No items in response"
 
 ## Testing
 

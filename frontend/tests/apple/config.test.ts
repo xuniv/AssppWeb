@@ -10,6 +10,7 @@ import {
   RETRYABLE_FAILURE_TYPE,
   volumeStoreEndpoint,
   redownloadEndpoint,
+  updateProductEndpoint,
 } from "../../src/apple/config";
 
 describe("apple/config", () => {
@@ -143,6 +144,13 @@ describe("apple/config", () => {
       const ep = redownloadEndpoint("aabbccddeeff");
       expect(ep.host).toBe("downloaddispatch.itunes.apple.com");
       expect(ep.path).toBe("/r/redownload?guid=aabbccddeeff");
+      expect(ep.externalVersionIdKey).toBe("appExtVrsId");
+    });
+
+    it("updateProduct targets downloaddispatch with the appExtVrsId key", () => {
+      const ep = updateProductEndpoint("aabbccddeeff");
+      expect(ep.host).toBe("downloaddispatch.itunes.apple.com");
+      expect(ep.path).toBe("/up/updateProduct?guid=aabbccddeeff");
       expect(ep.externalVersionIdKey).toBe("appExtVrsId");
     });
 

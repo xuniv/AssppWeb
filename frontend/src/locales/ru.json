@@ -440,7 +440,10 @@
       "missingVersion": "Отсутствует необходимая информация о версии",
       "invalidSinf": "Недействительный элемент sinf",
       "noSinf": "В ответе не найден sinf",
-      "tooManyRedirects": "Слишком много перенаправлений"
+      "tooManyRedirects": "Слишком много перенаправлений",
+      "versionLookupFailed": "Не удалось определить последнюю версию приложения для резервной загрузки",
+      "unexpectedResponse": "Неожиданный ответ от Apple (HTTP {{status}})",
+      "fallbackMismatch": "Apple вернул другое приложение или версию, чем было запрошено"
     },
     "purchase": {
       "paidNotSupported": "Покупка платных приложений не поддерживается",
