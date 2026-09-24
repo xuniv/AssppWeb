@@ -1,6 +1,6 @@
-import { appleRequest } from "./request";
-import { buildPlist, parsePlist } from "./plist";
-import { extractAndMergeCookies } from "./cookies";
+import { appleRequest } from './request';
+import { buildPlist, parsePlist } from './plist';
+import { extractAndMergeCookies } from './cookies';
 import {
   RETRYABLE_FAILURE_TYPE,
   VERSION_LOOKUP_CATALOGS,
@@ -9,10 +9,10 @@ import {
   storeIdToCountry,
   updateProductEndpoint,
   volumeStoreEndpoint,
-} from "./config";
-import i18n from "../i18n";
-import type { StoreDownloadEndpoint } from "./config";
-import type { Account, Cookie, Software } from "../types";
+} from './config';
+import i18n from '../i18n';
+import type { StoreDownloadEndpoint } from './config';
+import type { Account, Cookie, Software } from '../types';
 
 export class DownloadError extends Error {
   constructor(
@@ -20,7 +20,7 @@ export class DownloadError extends Error {
     public readonly code?: string,
   ) {
     super(message);
-    this.name = "DownloadError";
+    this.name = 'DownloadError';
   }
 }
 
@@ -37,7 +37,7 @@ export interface DownloadProductResult {
 }
 
 function failureTypeOf(dict: Record<string, any>): string {
-  return String(dict.failureType ?? "");
+  return String(dict.failureType ?? '');
 }
 
 function hasItems(dict: Record<string, any>): boolean {
@@ -52,8 +52,8 @@ export function isEmptyDownloadProductResponse(
 ): boolean {
   return (
     status === 200 &&
-    failureTypeOf(dict) === "" &&
-    String(dict.customerMessage ?? "") === "" &&
+    failureTypeOf(dict) === '' &&
+    String(dict.customerMessage ?? '') === '' &&
     !hasItems(dict)
   );
 }
@@ -65,24 +65,24 @@ export function isUnavailableDownloadProductResponse(
   status: number,
   dict: Record<string, any>,
 ): boolean {
-  const message = String(dict.customerMessage ?? "")
+  const message = String(dict.customerMessage ?? '')
     .trim()
     .toLowerCase();
   return (
     status === 200 &&
-    failureTypeOf(dict) === "" &&
+    failureTypeOf(dict) === '' &&
     !hasItems(dict) &&
-    (message === "no longer available" ||
-      message.endsWith(" no longer available"))
+    (message === 'no longer available' ||
+      message.endsWith(' no longer available'))
   );
 }
 
 function looksLikePlist(body: string): boolean {
   const trimmed = body.trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith("bplist")) return true;
+  if (trimmed.startsWith('bplist')) return true;
   const lower = trimmed.toLowerCase();
-  return ["<?xml", "<plist", "<dict", "<key"].some((marker) =>
+  return ['<?xml', '<plist', '<dict', '<key'].some((marker) =>
     lower.includes(marker),
   );
 }
@@ -93,7 +93,7 @@ function isEmptyServerError(response: ProductResponse): boolean {
   return (
     response.status === 500 &&
     !looksLikePlist(response.body) &&
-    response.body.replace(/<[^>]*>/g, " ").trim() === ""
+    response.body.replace(/<[^>]*>/g, ' ').trim() === ''
   );
 }
 
@@ -110,7 +110,7 @@ function decodePlist(body: string): Record<string, any> | undefined {
   if (!looksLikePlist(body)) return undefined;
   try {
     const dict = parsePlist(body);
-    return dict && typeof dict === "object" && !Array.isArray(dict)
+    return dict && typeof dict === 'object' && !Array.isArray(dict)
       ? (dict as Record<string, any>)
       : undefined;
   } catch {
@@ -121,7 +121,7 @@ function decodePlist(body: string): Record<string, any> | undefined {
 function requireDict(response: ProductResponse): Record<string, any> {
   if (!response.dict) {
     throw new DownloadError(
-      i18n.t("errors.download.unexpectedResponse", {
+      i18n.t('errors.download.unexpectedResponse', {
         status: response.status,
       }),
     );
@@ -137,24 +137,24 @@ export async function lookupLatestExternalVersionId(
   app: Software,
 ): Promise<string> {
   const lookupFailed = () =>
-    new DownloadError(i18n.t("errors.download.versionLookupFailed"));
+    new DownloadError(i18n.t('errors.download.versionLookupFailed'));
 
   const country = storeIdToCountry(account.store);
   if (!country) throw lookupFailed();
 
   for (const catalog of VERSION_LOOKUP_CATALOGS) {
     const params = new URLSearchParams({
-      version: "2",
+      version: '2',
       id: String(app.id),
-      p: "mdm-lockup",
-      caller: "MDM",
+      p: 'mdm-lockup',
+      caller: 'MDM',
       platform: catalog,
       cc: country.toLowerCase(),
-      l: "en",
+      l: 'en',
     });
 
     const response = await appleRequest({
-      method: "GET",
+      method: 'GET',
       host: VERSION_LOOKUP_HOST,
       path: `/WebObjects/MZStorePlatform.woa/wa/lookup?${params}`,
     });
@@ -170,10 +170,9 @@ export async function lookupLatestExternalVersionId(
     const offer = data?.results?.[String(app.id)]?.offers?.[0];
     if (!offer) continue;
 
-    let versionId = String(offer.version?.externalId ?? "");
-    if (!versionId && typeof offer.buyParams === "string") {
-      versionId =
-        new URLSearchParams(offer.buyParams).get("appExtVrsId") ?? "";
+    let versionId = String(offer.version?.externalId ?? '');
+    if (!versionId && typeof offer.buyParams === 'string') {
+      versionId = new URLSearchParams(offer.buyParams).get('appExtVrsId') ?? '';
     }
     if (!/^[1-9]\d*$/.test(versionId)) throw lookupFailed();
 
@@ -195,23 +194,23 @@ function validateUpdateProduct(
   // Structured failures (2034, 9610, ...) are mapped by the caller.
   if (failureTypeOf(dict)) return dict;
 
-  const customerMessage = String(dict.customerMessage ?? "");
+  const customerMessage = String(dict.customerMessage ?? '');
   if (customerMessage) throw new DownloadError(customerMessage);
 
   if (response.status !== 200) {
     throw new DownloadError(
-      i18n.t("errors.download.unexpectedResponse", {
+      i18n.t('errors.download.unexpectedResponse', {
         status: response.status,
       }),
     );
   }
 
   if (!hasItems(dict)) {
-    throw new DownloadError(i18n.t("errors.download.noItems"));
+    throw new DownloadError(i18n.t('errors.download.noItems'));
   }
 
   const mismatch = () =>
-    new DownloadError(i18n.t("errors.download.fallbackMismatch"));
+    new DownloadError(i18n.t('errors.download.fallbackMismatch'));
   if (dict.songList.length !== 1) throw mismatch();
 
   const metadata = (dict.songList[0]?.metadata ?? {}) as Record<string, any>;
@@ -224,7 +223,7 @@ function validateUpdateProduct(
 
   const bundleId = metadata.softwareVersionBundleId;
   if (
-    typeof bundleId !== "string" ||
+    typeof bundleId !== 'string' ||
     !bundleId ||
     (app.bundleID && bundleId !== app.bundleID)
   ) {
@@ -248,9 +247,9 @@ export async function sendDownloadProduct(
   let cookies = [...account.cookies];
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/x-apple-plist",
-    "iCloud-DSID": account.directoryServicesIdentifier,
-    "X-Dsid": account.directoryServicesIdentifier,
+    'Content-Type': 'application/x-apple-plist',
+    'iCloud-DSID': account.directoryServicesIdentifier,
+    'X-Dsid': account.directoryServicesIdentifier,
   };
 
   async function post(
@@ -258,10 +257,10 @@ export async function sendDownloadProduct(
     versionId: string | undefined,
   ): Promise<ProductResponse> {
     const payload: Record<string, any> = {
-      creditDisplay: "",
+      creditDisplay: '',
       guid: deviceId,
       salableAdamId: app.id,
-      serialNumber: "0",
+      serialNumber: '0',
     };
     if (versionId) {
       payload[endpoint.externalVersionIdKey] = versionId;
@@ -272,7 +271,7 @@ export async function sendDownloadProduct(
     let path = endpoint.path;
     for (let redirectAttempt = 0; redirectAttempt <= 3; redirectAttempt++) {
       const response = await appleRequest({
-        method: "POST",
+        method: 'POST',
         host,
         path,
         headers,
@@ -283,9 +282,9 @@ export async function sendDownloadProduct(
       cookies = extractAndMergeCookies(response.rawHeaders, cookies);
 
       if (response.status === 302) {
-        const location = response.headers["location"];
+        const location = response.headers['location'];
         if (!location) {
-          throw new DownloadError(i18n.t("errors.download.redirectLocation"));
+          throw new DownloadError(i18n.t('errors.download.redirectLocation'));
         }
         const url = new URL(location, `https://${host}${path}`);
         host = url.hostname;
@@ -300,7 +299,7 @@ export async function sendDownloadProduct(
       };
     }
 
-    throw new DownloadError(i18n.t("errors.download.tooManyRedirects"));
+    throw new DownloadError(i18n.t('errors.download.tooManyRedirects'));
   }
 
   const primary = await post(

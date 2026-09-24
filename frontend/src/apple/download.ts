@@ -1,9 +1,9 @@
-import { buildPlist } from "./plist";
-import { DownloadError, sendDownloadProduct } from "./downloadProduct";
-import i18n from "../i18n";
-import type { Account, Software, DownloadOutput, Sinf } from "../types";
+import { buildPlist } from './plist';
+import { DownloadError, sendDownloadProduct } from './downloadProduct';
+import i18n from '../i18n';
+import type { Account, Software, DownloadOutput, Sinf } from '../types';
 
-export { DownloadError } from "./downloadProduct";
+export { DownloadError } from './downloadProduct';
 
 export async function getDownloadInfo(
   account: Account,
@@ -21,28 +21,28 @@ export async function getDownloadInfo(
   if (dict.failureType) {
     const failureType = String(dict.failureType);
     switch (failureType) {
-      case "2034":
-      case "2042":
+      case '2034':
+      case '2042':
         throw new DownloadError(
-          i18n.t("errors.download.passwordExpired"),
+          i18n.t('errors.download.passwordExpired'),
           failureType,
         );
-      case "9610":
+      case '9610':
         throw new DownloadError(
-          i18n.t("errors.download.licenseRequired"),
-          "9610",
+          i18n.t('errors.download.licenseRequired'),
+          '9610',
         );
       default: {
-        if (customerMessage === "Your password has changed.") {
+        if (customerMessage === 'Your password has changed.') {
           throw new DownloadError(
-            i18n.t("errors.download.passwordExpired"),
+            i18n.t('errors.download.passwordExpired'),
             failureType,
           );
         }
         // If apple provides a specific string, we fall back to it, otherwise we use the localized default.
         throw new DownloadError(
           customerMessage ||
-            i18n.t("errors.download.downloadFailed", { failureType }),
+            i18n.t('errors.download.downloadFailed', { failureType }),
           failureType,
         );
       }
@@ -51,31 +51,31 @@ export async function getDownloadInfo(
 
   const songList = dict.songList as Record<string, any>[] | undefined;
   if (!songList || songList.length === 0) {
-    if (customerMessage === "Your password has changed.") {
-      throw new DownloadError(i18n.t("errors.download.passwordExpired"));
+    if (customerMessage === 'Your password has changed.') {
+      throw new DownloadError(i18n.t('errors.download.passwordExpired'));
     }
     // A message-only response (e.g. "“App” No Longer Available") is more
     // useful to the user than a generic "no items".
     throw new DownloadError(
-      customerMessage || i18n.t("errors.download.noItems"),
+      customerMessage || i18n.t('errors.download.noItems'),
     );
   }
 
   const item = songList[0];
   const url = item.URL as string;
   if (!url) {
-    throw new DownloadError(i18n.t("errors.download.missingUrl"));
+    throw new DownloadError(i18n.t('errors.download.missingUrl'));
   }
 
   const metadata = item.metadata as Record<string, any>;
   if (!metadata) {
-    throw new DownloadError(i18n.t("errors.download.missingMetadata"));
+    throw new DownloadError(i18n.t('errors.download.missingMetadata'));
   }
 
   const version = metadata.bundleShortVersionString as string;
   const bundleVersion = metadata.bundleVersion as string;
   if (!version || !bundleVersion) {
-    throw new DownloadError(i18n.t("errors.download.missingVersion"));
+    throw new DownloadError(i18n.t('errors.download.missingVersion'));
   }
 
   const sinfs: Sinf[] = [];
@@ -90,10 +90,10 @@ export async function getDownloadInfo(
           const bytes =
             sinf instanceof ArrayBuffer ? new Uint8Array(sinf) : sinf;
           sinfBase64 = base64FromBytes(bytes);
-        } else if (typeof sinf === "string") {
+        } else if (typeof sinf === 'string') {
           sinfBase64 = sinf;
         } else {
-          throw new DownloadError(i18n.t("errors.download.invalidSinf"));
+          throw new DownloadError(i18n.t('errors.download.invalidSinf'));
         }
         sinfs.push({ id, sinf: sinfBase64 });
       }
@@ -101,15 +101,15 @@ export async function getDownloadInfo(
   }
 
   if (sinfs.length === 0) {
-    throw new DownloadError(i18n.t("errors.download.noSinf"));
+    throw new DownloadError(i18n.t('errors.download.noSinf'));
   }
 
   // Build iTunesMetadata plist
   const metadataDict: Record<string, any> = { ...metadata };
-  metadataDict["apple-id"] = account.email;
-  metadataDict["userName"] = account.email;
+  metadataDict['apple-id'] = account.email;
+  metadataDict['userName'] = account.email;
   delete metadataDict.passwordToken;
-  delete metadataDict["passwordToken"];
+  delete metadataDict['passwordToken'];
   const iTunesMetadata = base64FromString(buildPlist(metadataDict));
 
   return {
@@ -130,7 +130,7 @@ function base64FromString(value: string): string {
 }
 
 function base64FromBytes(bytes: Uint8Array): string {
-  let binary = "";
+  let binary = '';
   const chunkSize = 0x8000;
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const chunk = bytes.subarray(i, i + chunkSize);
