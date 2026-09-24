@@ -331,6 +331,22 @@ describe('apple/downloadProduct', () => {
       expect(payloadOf(redownload).externalVersionId).toBeUndefined();
     });
 
+    it('starts the fallback when volumeStore says No Longer Available', async () => {
+      queue(
+        plistResponse({ customerMessage: '“컬쳐랜드” No Longer Available' }),
+        LOOKUP_OK,
+        SUCCESS,
+      );
+
+      const { dict } = await sendDownloadProduct(account, app);
+
+      expect(dict.songList).toHaveLength(1);
+      expect(calls()).toHaveLength(3);
+      const redownload = calls()[2];
+      expect(redownload.path).toBe(`/r/redownload?guid=${DEVICE_ID}`);
+      expect(payloadOf(redownload).appExtVrsId).toBe(VERSION_ID);
+    });
+
     it('falls back to updateProduct when redownload answers an empty HTTP 500', async () => {
       queue(EMPTY, LOOKUP_OK, response(500, ''), SUCCESS);
 
@@ -339,10 +355,60 @@ describe('apple/downloadProduct', () => {
       expect(dict.songList[0].metadata.softwareVersionBundleId).toBe(
         'kr.cultureland',
       );
-      const [, , redownload, update] = calls();
+      const [primary, , redownload, update] = calls();
       expect(update.host).toBe('downloaddispatch.itunes.apple.com');
       expect(update.path).toBe(`/up/updateProduct?guid=${DEVICE_ID}`);
       expect(update.body).toBe(redownload.body);
+      for (const dispatch of [redownload, update]) {
+        expect(dispatch.method).toBe('POST');
+        expect(dispatch.headers).toEqual(primary.headers);
+      }
+    });
+
+    it('keeps cookies set by the dispatch hops', async () => {
+      queue(
+        EMPTY,
+        LOOKUP_OK,
+        response(500, '', {
+          rawHeaders: [
+            ['Set-Cookie', 'redownload=a; Path=/; Domain=.itunes.apple.com'],
+          ],
+        }),
+        plistResponse({ songList: [songItem()] }, 200, {
+          rawHeaders: [
+            ['Set-Cookie', 'update=b; Path=/; Domain=.itunes.apple.com'],
+          ],
+        }),
+      );
+
+      const { updatedCookies } = await sendDownloadProduct(account, app);
+
+      expect(calls()[3].cookies?.map((c) => c.name)).toContain('redownload');
+      expect(updatedCookies.map((c) => c.name)).toEqual(
+        expect.arrayContaining(['mz_at0', 'redownload', 'update']),
+      );
+    });
+
+    it('rejects a non-200 updateProduct response even with a matching item', async () => {
+      queue(
+        EMPTY,
+        LOOKUP_OK,
+        response(500, ''),
+        plistResponse({ songList: [songItem()] }, 500),
+      );
+
+      await expect(sendDownloadProduct(account, app)).rejects.toThrow(
+        i18n.t('errors.download.unexpectedResponse', { status: 500 }),
+      );
+    });
+
+    it('only retries an empty redownload error on HTTP 500', async () => {
+      queue(EMPTY, LOOKUP_OK, response(503, ''));
+
+      await expect(sendDownloadProduct(account, app)).rejects.toThrow(
+        i18n.t('errors.download.unexpectedResponse', { status: 503 }),
+      );
+      expect(calls()).toHaveLength(3);
     });
 
     it('treats a markup-only HTTP 500 as empty', async () => {
@@ -468,6 +534,39 @@ describe('apple/downloadProduct', () => {
       expect(redownload.path).toBe(`/r/redownload?guid=${DEVICE_ID}`);
       expect(payloadOf(redownload).appExtVrsId).toBeUndefined();
     });
+
+    it.each([
+      ['an empty HTTP 500', response(500, ''), 500],
+      ['an empty HTTP 200', EMPTY, undefined],
+    ])(
+      'never sends an unpinned updateProduct after %s from an unpinned redownload',
+      async (_, redownload, errorStatus) => {
+        queue(
+          plistResponse({ failureType: '5002' }),
+          response(503, ''),
+          redownload,
+        );
+
+        const result = sendDownloadProduct(account, app);
+
+        if (errorStatus === undefined) {
+          await expect(result).resolves.toEqual({
+            dict: {},
+            updatedCookies: account.cookies,
+          });
+        } else {
+          await expect(result).rejects.toThrow(
+            i18n.t('errors.download.unexpectedResponse', {
+              status: errorStatus,
+            }),
+          );
+        }
+        expect(calls()).toHaveLength(3);
+        expect(
+          calls().some((opts) => opts.path.startsWith('/up/updateProduct')),
+        ).toBe(false);
+      },
+    );
 
     it('never sends an unpinned dispatch request for an empty response', async () => {
       queue(EMPTY, response(503, ''));
