@@ -21,7 +21,8 @@
     "accounts": "账号",
     "search": "搜索",
     "downloads": "下载",
-    "settings": "设置"
+    "settings": "设置",
+    "uploads": "IPA 上传"
   },
   "home": {
     "welcome": "欢迎来到 Asspp Web",
@@ -482,5 +483,28 @@
     "downloadLimit": {
       "message": "{{appName}}\n应用大小 {{size}} MB 超过服务器限制 {{limit}} MB。\n请联系管理员或自行部署后再尝试。"
     }
+  },
+  "uploads": {
+    "title": "IPA 上传",
+    "description": "上传通过 ipatool 等工具下载的 IPA，然后直接在设备上安装。此页面无需 Apple 账户。",
+    "retention": "上传的 IPA 为临时文件，服务器重启或按配置自动清理时会被删除，安装链接也会失效。",
+    "installNote": "安装需要 iOS 信任且可公开访问的 HTTPS 地址，以及有效签名和必要 App Store 许可的 IPA。上传保留原文件，不会重新签名或解密。",
+    "chooseFile": "选择 IPA 文件",
+    "upload": "上传 IPA",
+    "cancel": "取消",
+    "cancelled": "已取消上传。",
+    "progress": "上传中… {{percent}}%",
+    "processing": "上传完成，正在检查 IPA…",
+    "ready": "{{name}} 已准备好安装。",
+    "invalidFile": "请选择 .ipa 文件。",
+    "failed": "上传操作失败。",
+    "empty": "暂无上传的 IPA。请在上方选择文件。",
+    "install": "安装",
+    "copy": "复制安装链接",
+    "copied": "已复制安装链接。",
+    "copyFailed": "无法复制安装链接。",
+    "qr": "二维码",
+    "delete": "删除",
+    "confirmDelete": "删除 {{name}} 并使安装链接失效？"
   }
 }

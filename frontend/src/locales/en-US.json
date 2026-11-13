@@ -21,7 +21,8 @@
     "accounts": "Accounts",
     "search": "Search",
     "downloads": "Downloads",
-    "settings": "Settings"
+    "settings": "Settings",
+    "uploads": "IPA uploads"
   },
   "home": {
     "welcome": "Welcome to Asspp Web",
@@ -482,5 +483,28 @@
     "downloadLimit": {
       "message": "{{appName}}\nApp size {{size}} MB exceeds the server limit of {{limit}} MB.\nPlease contact the administrator or deploy your own instance."
     }
+  },
+  "uploads": {
+    "title": "IPA uploads",
+    "description": "Upload an IPA downloaded with ipatool or another tool, then install it directly on your device. No Apple account is needed on this page.",
+    "retention": "Uploads are temporary: server restarts and configured automatic cleanup delete the files and expire their install links.",
+    "installNote": "Installation requires a publicly reachable HTTPS address trusted by iOS and an IPA with valid signing and any required App Store license. Uploading preserves the original IPA and does not sign or decrypt it.",
+    "chooseFile": "Choose an IPA file",
+    "upload": "Upload IPA",
+    "cancel": "Cancel",
+    "cancelled": "Upload cancelled.",
+    "progress": "Uploading… {{percent}}%",
+    "processing": "Upload received. Checking IPA…",
+    "ready": "{{name}} is ready to install.",
+    "invalidFile": "Choose a file ending in .ipa.",
+    "failed": "The upload operation failed.",
+    "empty": "No uploaded IPAs. Choose a file above to get started.",
+    "install": "Install",
+    "copy": "Copy install link",
+    "copied": "Install link copied.",
+    "copyFailed": "Could not copy the install link.",
+    "qr": "QR code",
+    "delete": "Delete",
+    "confirmDelete": "Delete {{name}} and invalidate its install link?"
   }
 }

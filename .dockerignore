@@ -12,3 +12,13 @@ icon.jpg
 references
 compose*.yml
 .DS_Store
+**/.env
+**/.env.*
+**/.npmrc
+**/*.pem
+**/*.key
+**/data
+**/coverage
+.agents
+.codex
+**/*.log

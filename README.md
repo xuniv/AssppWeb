@@ -61,6 +61,17 @@ If your build log fails at `Deploy a container application` with `Unauthorized`,
 
 </details>
 
+### Install an existing IPA
+
+Open **IPA uploads** next to Downloads, choose an `.ipa` from ipatool or another tool, and upload it. No Apple account needs to be added to this page. Once validation finishes, use **Install**, copy the install link, or scan the QR code from your iOS device. **Delete** removes the file and invalidates its link.
+
+- Both XML and binary `Payload/*.app/Info.plist` are supported. The bundle identifier, build version, and title are read from the main app; the IPA itself is served unchanged.
+- Installation needs a publicly reachable `PUBLIC_BASE_URL` over HTTPS with a certificate trusted by iOS. The IPA must already have valid signing and any required App Store license. This feature does not resign or decrypt apps.
+- Uploads live separately in `DATA_DIR/uploads` and are **all removed at server startup**, including interrupted uploads. They are not added to the regular download history. Regular downloaded packages retain upstream's persistence behavior.
+- `AUTO_CLEANUP_DAYS` and `AUTO_CLEANUP_MAX_MB` also govern uploads. Upload cleanup runs hourly and before listing/accepting files; the storage cap applies separately to the upload store and the upstream download cache. Oldest uploads are evicted first.
+- `MAX_DOWNLOAD_MB` also limits each upload, with an absolute 8 GiB ceiling. An upload cannot exceed a configured upload storage cap. If a reverse proxy is used, allow the intended request body size and upload duration there as well (for nginx, `client_max_body_size` and `proxy_read_timeout`).
+- With `ACCESS_PASSWORD` enabled, listing, uploading, and deleting require the same access token as other APIs. As with upstream installs, the random install URL grants public access to its manifest and payload so iOS can fetch them. Share it only with intended recipients.
+
 ### Self-Host with Docker Compose
 
 <details>

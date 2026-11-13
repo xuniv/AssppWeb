@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { config, DOWNLOAD_TIMEOUT_MS } from '../config.js';
 import { inject } from './sinfInjector.js';
 import { ChunkedDownloader } from './chunkedDownloader.js';
@@ -364,7 +364,7 @@ export function createTask(
   safePathSegment(software.version, 'version');
 
   const task: DownloadTask = {
-    id: uuidv4(),
+    id: randomUUID(),
     software,
     accountHash,
     downloadURL,

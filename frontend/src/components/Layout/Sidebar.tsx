@@ -9,6 +9,7 @@ import {
   SettingsIcon,
   SunIcon,
   SystemIcon,
+  UploadsIcon,
 } from '../common/icons';
 import { useSettingsStore } from '../../store/settings';
 
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/accounts', label: 'accounts', icon: AccountsIcon },
   { to: '/search', label: 'search', icon: SearchIcon },
   { to: '/downloads', label: 'downloads', icon: DownloadsIcon },
+  { to: '/uploads', label: 'uploads', icon: UploadsIcon },
   { to: '/settings', label: 'settings', icon: SettingsIcon },
 ];
 

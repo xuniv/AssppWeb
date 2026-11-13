@@ -1,7 +1,7 @@
 import type { Software } from '../types/index.js';
 
 export function buildManifest(
-  software: Software,
+  software: Pick<Software, 'bundleID' | 'version' | 'name'>,
   payloadUrl: string,
   displayImageSmallUrl: string,
   displayImageLargeUrl: string,

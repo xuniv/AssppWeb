@@ -141,4 +141,35 @@ describe('apple/authenticate transient responses', () => {
     await expect(login()).rejects.toThrow(i18n.t('errors.auth.retryLater', { seconds: 120 }));
     expect(appleRequest).toHaveBeenCalledTimes(1);
   });
+
+  it('recovers from a non-plist 403 by rotating endpoints', async () => {
+    vi.mocked(appleRequest)
+      .mockResolvedValueOnce({ ...transientReply(403), body: '<html>Forbidden</html>' })
+      .mockResolvedValueOnce(accountReply());
+    const account = login();
+    await vi.advanceTimersByTimeAsync(2_000);
+    await expect(account).resolves.toMatchObject({ passwordToken: 'token' });
+    expect(vi.mocked(appleRequest).mock.calls.map(([options]) => options.host)).toEqual([
+      'buy.itunes.apple.com',
+      'auth.itunes.apple.com',
+    ]);
+  });
+
+  it.each([200, 403, 503])('does not retry an Apple credential error with HTTP %s', async (status) => {
+    vi.mocked(appleRequest).mockResolvedValue({
+      ...transientReply(status),
+      body: buildPlist({ failureType: '5005', customerMessage: 'Invalid verification code' }),
+    });
+    await expect(login()).rejects.toThrow('Invalid verification code');
+    expect(appleRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves a 2FA challenge delivered with HTTP 403', async () => {
+    vi.mocked(appleRequest).mockResolvedValue({
+      ...transientReply(403),
+      body: buildPlist({ failureType: '', customerMessage: 'MZFinance.BadLogin.Configurator_message' }),
+    });
+    await expect(login()).rejects.toMatchObject({ codeRequired: true });
+    expect(appleRequest).toHaveBeenCalledTimes(1);
+  });
 });

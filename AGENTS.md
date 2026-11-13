@@ -116,7 +116,7 @@ Two consequences in `authenticate.ts`:
 
 One signature serves every attempt: all three candidates are in Apple's SAP-signed list, take the same body, and a signature covers the body alone. `ipatool#513` reports the legacy endpoint answering 302 to a `p{pod}-buy` host where reposting the body returns 200, which the redirect handling already follows with the POST and body intact.
 
-Neither ipatool nor this project can fix the shedding itself; ipatool 2.5.0 still reports it. A failure whose statuses carried no Apple service header is reported as `errors.auth.edgeRefused`, separately from `errors.auth.transientFailure`, because the advice differs: one is Apple's edge, the other a service that answered badly. Every refusal logs the response headers to the console under `[Auth]` — they ride the wisp tunnel, so devtools cannot show them.
+Neither ipatool nor this project can fix the shedding itself; ipatool 2.5.0 still reports it. A failure whose statuses carried no Apple service header is reported as `errors.auth.edgeRefused`, separately from `errors.auth.transientFailure`, because the advice differs: one is Apple's edge, the other a service that answered badly. Refusal diagnostics log only content type, length, and Retry-After under `[Auth]`; never log tokens, cookies, redirect queries, or correlation identifiers. Non-plist 403 responses are retryable like current ipatool; populated Apple credential errors and 2FA challenges are not replayed.
 
 ## Dynamic Host Validation (Backend)
 
@@ -142,6 +142,15 @@ Downloads, version lists, and version metadata share `frontend/src/apple/downloa
 The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using Node.js native HTTPS. It sends Configurator-compatible request headers (`User-Agent`, `Accept: application/xml`). The bag response is public data (Apple service URLs) — no credentials are involved. See `backend/src/routes/bag.ts`.
 
 ## Backend
+
+### Temporary IPA uploads (fork extension)
+
+- Keep upload routes and state in `routes/uploads.ts` and `services/uploadManager.ts`; uploaded files must never be extracted or rewritten.
+- `/uploads` is a separate UI route next to Downloads and works without an Apple account. Apple credentials must never be part of an upload request.
+- Stream raw IPA bodies to disk with enforced byte limits. Only bounded main-app XML/binary `Info.plist` metadata may be decompressed for manifests.
+- Uploads use `DATA_DIR/uploads`, are deleted on every server startup, and follow configured age/space limits independently of the download cache. Do not persist uploaded IPA metadata into upstream tasks.
+- Management APIs require access auth; only UUID-bearing `/api/install/uploads/...` URLs are public, matching upstream OTA installation behavior.
+- Build and test on Node 24. Runtime images must contain only production backend dependencies.
 
 - Express + `@mercuryworkshop/wisp-js` for HTTP and Wisp proxy
 - ESM modules (`"type": "module"` in package.json)

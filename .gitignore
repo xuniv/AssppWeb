@@ -49,6 +49,9 @@
 .dynamodb/
 .env
 .env.test
+.env.*
+.npmrc
+*.key
 .eslintcache
 .fseventsd
 .fusebox/

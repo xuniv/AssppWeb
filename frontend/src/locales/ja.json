@@ -21,7 +21,8 @@
     "accounts": "アカウント",
     "search": "検索",
     "downloads": "ダウンロード",
-    "settings": "設定"
+    "settings": "設定",
+    "uploads": "IPA"
   },
   "home": {
     "welcome": "Asspp Web へようこそ",
@@ -482,5 +483,28 @@
     "downloadLimit": {
       "message": "{{appName}}\nアプリのサイズ {{size}} MB がサーバーの制限 {{limit}} MB を超えています。\n管理者に連絡するか、ご自身でサーバーを展開して再試行してください。"
     }
+  },
+  "uploads": {
+    "title": "IPA アップロード",
+    "description": "ipatool などで取得した IPA をアップロードして、端末に直接インストールできます。このページでは Apple アカウントは不要です。",
+    "retention": "IPA は一時保存されます。サーバー再起動や設定された自動整理で削除され、インストールリンクも無効になります。",
+    "installNote": "iOS が信頼する公開 HTTPS アドレスと、有効な署名および必要な App Store ライセンスを持つ IPA が必要です。IPA は変更せず、再署名や復号は行いません。",
+    "chooseFile": "IPA ファイルを選択",
+    "upload": "IPA をアップロード",
+    "cancel": "キャンセル",
+    "cancelled": "アップロードを中止しました。",
+    "progress": "アップロード中… {{percent}}%",
+    "processing": "受信完了。IPA を確認中…",
+    "ready": "{{name}} をインストールできます。",
+    "invalidFile": ".ipa ファイルを選択してください。",
+    "failed": "アップロード操作に失敗しました。",
+    "empty": "IPA はまだありません。上でファイルを選択してください。",
+    "install": "インストール",
+    "copy": "リンクをコピー",
+    "copied": "リンクをコピーしました。",
+    "copyFailed": "リンクをコピーできませんでした。",
+    "qr": "QR コード",
+    "delete": "削除",
+    "confirmDelete": "{{name}} を削除してインストールリンクを無効にしますか？"
   }
 }

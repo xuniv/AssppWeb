@@ -21,7 +21,8 @@
     "accounts": "帳號",
     "search": "搜尋",
     "downloads": "下載",
-    "settings": "設定"
+    "settings": "設定",
+    "uploads": "IPA 上傳"
   },
   "home": {
     "welcome": "歡迎來到 Asspp Web",
@@ -482,5 +483,28 @@
     "downloadLimit": {
       "message": "{{appName}}\n應用程式大小 {{size}} MB 超過伺服器限制 {{limit}} MB。\n請聯絡管理員或自行部署後再嘗試。"
     }
+  },
+  "uploads": {
+    "title": "IPA 上傳",
+    "description": "上傳透過 ipatool 等工具下載的 IPA，然後直接在裝置上安裝。此頁面不需要 Apple 帳號。",
+    "retention": "上傳的 IPA 為暫存檔案，伺服器重新啟動或依設定自動清理時會被刪除，安裝連結也會失效。",
+    "installNote": "安裝需要 iOS 信任且可公開存取的 HTTPS 位址，以及有效簽章與必要 App Store 授權的 IPA。上傳保留原始檔案，不會重新簽署或解密。",
+    "chooseFile": "選擇 IPA 檔案",
+    "upload": "上傳 IPA",
+    "cancel": "取消",
+    "cancelled": "已取消上傳。",
+    "progress": "上傳中… {{percent}}%",
+    "processing": "上傳完成，正在檢查 IPA…",
+    "ready": "{{name}} 已準備好安裝。",
+    "invalidFile": "請選擇 .ipa 檔案。",
+    "failed": "上傳操作失敗。",
+    "empty": "尚無上傳的 IPA。請在上方選擇檔案。",
+    "install": "安裝",
+    "copy": "複製安裝連結",
+    "copied": "已複製安裝連結。",
+    "copyFailed": "無法複製安裝連結。",
+    "qr": "QR 碼",
+    "delete": "刪除",
+    "confirmDelete": "刪除 {{name}} 並使安裝連結失效？"
   }
 }

@@ -48,27 +48,26 @@ const MAX_AUTH_RETRY_DELAY_MS = 30_000;
 // a different problem from a service that answered badly, and different advice.
 const SERVICE_HEADERS = ['apple-originating-system', 'x-apple-jingle-correlation-key', 'x-responding-instance'];
 
-// Logged behind an empty refusal. A 204 carries no body and no failure code,
-// so the response headers are the only evidence of which Apple service
-// answered and whether the request reached the credential check at all. They
-// travel inside the wisp tunnel, so they cannot be read from devtools.
-const LOGGED_HEADERS = [
-  ...SERVICE_HEADERS,
-  'x-apple-request-uuid',
-  'apple-timing-app',
-  'apple-seq',
-  'apple-tk',
-  'content-type',
-  'content-length',
-  'location',
-  'pod',
-  'x-set-apple-store-front',
-  'retry-after',
-  'www-authenticate',
-];
+// Keep diagnostics useful without logging tokens, cookies, redirect query
+// strings, or Apple correlation identifiers.
+const LOGGED_HEADERS = ['content-type', 'content-length', 'retry-after'];
 
-function isTransientAuthStatus(status: number): boolean {
-  return status === 204 || status === 404 || status === 429 || Math.floor(status / 100) === 5;
+function authDictionary(body: string): Record<string, any> | undefined {
+  try {
+    const value = parsePlist(body);
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isTransientAuthResponse(response: AuthResponse): boolean {
+  // ipatool also retries non-plist 403s from Apple's edge. Never replay a
+  // populated credential error or 2FA challenge, even with an error status.
+  const dict = authDictionary(response.body);
+  if (dict && ['failureType', 'customerMessage', 'dialog', 'accountInfo'].some((key) => key in dict)) return false;
+  const { status } = response;
+  return status === 204 || status === 403 || status === 404 || status === 429 || Math.floor(status / 100) === 5;
 }
 
 function retryAfterMs(header: string | undefined): number | undefined {
@@ -90,7 +89,7 @@ async function sendWithTransientRetry(
   let reachedService = false;
   for (;;) {
     const response = await send();
-    if (!isTransientAuthStatus(response.status)) return response;
+    if (!isTransientAuthResponse(response)) return response;
 
     if (SERVICE_HEADERS.some((name) => response.headers[name])) reachedService = true;
     statuses.push(response.status);
@@ -315,7 +314,9 @@ export class Authenticator {
               continue;
             }
 
-            if (response.status !== 200) throw new Error(`Authentication failed (HTTP ${response.status})`);
+            if (response.status !== 200 && !authDictionary(response.body)) {
+              throw new AuthenticationError(`Authentication failed (HTTP ${response.status})`);
+            }
 
             // Handle non-plist responses (e.g. 403 with empty body)
             if (!response.body.trim()) {
@@ -337,7 +338,7 @@ export class Authenticator {
 
             const accountInfo = dict.accountInfo as Record<string, any>;
             if (!accountInfo) {
-              throw new Error(failureMessage ?? i18n.t('errors.auth.missingAccountInfo'));
+              throw new AuthenticationError(failureMessage ?? i18n.t('errors.auth.missingAccountInfo'));
             }
 
             const address = accountInfo.address as Record<string, any>;

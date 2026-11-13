@@ -21,7 +21,8 @@
     "accounts": "계정",
     "search": "검색",
     "downloads": "다운로드",
-    "settings": "설정"
+    "settings": "설정",
+    "uploads": "IPA 업로드"
   },
   "home": {
     "welcome": "Asspp Web에 오신 것을 환영합니다",
@@ -458,7 +459,7 @@
       "missingAddress": "응답에 address가 없습니다",
       "unknownReason": "알 수 없는 이유로 인증에 실패했습니다",
       "transientFailure": "인증 실패: {{attempts}}번 시도했지만 Apple이 응답하지 않았습니다(HTTP {{statuses}}). 잠시 후 다시 시도해 주세요.",
-      "edgeRefused": "인증 실패: {{attempts}}번의 시도가 모두 로그인 서버스에 도달하기 전에 Apple 엗지에서 거부됐습니다 (HTTP {{statuses}}). Apple은 이 엔드토인트에 무작위로 부하 제한을 걸었습니다. 잠시 후 다시 시도하세요.",
+      "edgeRefused": "인증 실패: {{attempts}}번 시도했지만 Apple 로그인 서비스의 응답을 받지 못했습니다(HTTP {{statuses}}). Apple 에지의 일시적인 요청 거부일 수 있습니다. 잠시 후 다시 시도해 주세요.",
       "retryLater": "인증 실패: Apple이 {{seconds}}초 후에 다시 시도하라고 요청했습니다. 잠시 후 다시 시도해 주세요."
     }
   },
@@ -482,5 +483,28 @@
     "downloadLimit": {
       "message": "{{appName}}\n앱 크기 {{size}} MB가 서버 제한 {{limit}} MB를 초과했습니다.\n관리자에게 문의하거나 자체 인스턴스를 배포하여 다시 시도하십시오."
     }
+  },
+  "uploads": {
+    "title": "IPA 업로드",
+    "description": "ipatool 등의 도구로 내려받은 IPA를 업로드한 뒤 기기에 직접 설치할 수 있습니다. 이 페이지에서는 Apple 계정이 필요하지 않습니다.",
+    "retention": "업로드한 IPA는 임시 보관됩니다. 서버 재시작 또는 설정된 자동 정리 시 파일이 삭제되고 설치 링크도 만료됩니다.",
+    "installNote": "설치하려면 iOS가 신뢰하는 공개 HTTPS 주소와 유효하게 서명된 IPA가 필요하며, App Store 앱은 해당 라이선스도 필요합니다. 업로드한 IPA는 원본 그대로 제공되며 재서명하거나 복호화하지 않습니다.",
+    "chooseFile": "IPA 파일 선택",
+    "upload": "IPA 업로드",
+    "cancel": "취소",
+    "cancelled": "업로드를 취소했습니다.",
+    "progress": "업로드 중… {{percent}}%",
+    "processing": "업로드 완료. IPA 확인 중…",
+    "ready": "{{name}} 설치 준비가 완료되었습니다.",
+    "invalidFile": ".ipa 확장자의 파일을 선택해 주세요.",
+    "failed": "업로드 작업에 실패했습니다.",
+    "empty": "업로드한 IPA가 없습니다. 위에서 파일을 선택해 주세요.",
+    "install": "설치",
+    "copy": "설치 링크 복사",
+    "copied": "설치 링크를 복사했습니다.",
+    "copyFailed": "설치 링크를 복사하지 못했습니다.",
+    "qr": "QR 코드",
+    "delete": "삭제",
+    "confirmDelete": "{{name}}을(를) 삭제하고 설치 링크를 만료시킬까요?"
   }
 }

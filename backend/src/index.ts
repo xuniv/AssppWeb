@@ -2,7 +2,7 @@ import express from 'express';
 import { createServer } from 'http';
 import path from 'path';
 import fs from 'fs';
-import { config } from './config.js';
+import { config, DOWNLOAD_TIMEOUT_MS } from './config.js';
 import { httpsRedirect } from './middleware/httpsRedirect.js';
 import { accessAuth } from './middleware/accessAuth.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -14,6 +14,7 @@ import packageRoutes from './routes/packages.js';
 import installRoutes from './routes/install.js';
 import settingsRoutes from './routes/settings.js';
 import bagRoutes from './routes/bag.js';
+import uploadRoutes from './routes/uploads.js';
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use('/api', packageRoutes);
 app.use('/api', installRoutes);
 app.use('/api', settingsRoutes);
 app.use('/api', bagRoutes);
+app.use('/api', uploadRoutes);
 
 // Serve static frontend files
 const publicDir = path.resolve(import.meta.dirname, '../public');
@@ -53,6 +55,7 @@ app.use(errorHandler);
 
 // Create HTTP server
 const server = createServer(app);
+server.requestTimeout = DOWNLOAD_TIMEOUT_MS;
 
 // WebSocket proxy for Apple TCP connections
 setupWsProxy(server);

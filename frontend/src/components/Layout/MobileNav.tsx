@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
-import { AccountsIcon, DownloadsIcon, HomeIcon, SearchIcon, SettingsIcon } from '../common/icons';
+import { AccountsIcon, DownloadsIcon, HomeIcon, SearchIcon, SettingsIcon, UploadsIcon } from '../common/icons';
 
 const navItems = [
   { to: '/', label: 'home', icon: HomeIcon },
   { to: '/accounts', label: 'accounts', icon: AccountsIcon },
   { to: '/search', label: 'search', icon: SearchIcon },
   { to: '/downloads', label: 'downloads', icon: DownloadsIcon },
+  { to: '/uploads', label: 'uploads', icon: UploadsIcon },
   { to: '/settings', label: 'settings', icon: SettingsIcon },
 ];
 
