@@ -110,11 +110,8 @@
       "codePlaceholder": "000000",
       "codeHelp": "Enter the verification code from your trusted device.",
       "signIn": "Sign In",
-      "preparingAssets": "Preparing signing components {{percent}}%",
-      "preparingSigner": "Setting up the signer, this takes about a minute…",
-      "signingRequest": "Signing the request…",
-      "signerFailed": "Could not prepare the signer: {{error}}",
       "verify": "Verify",
+      "retrying": "Apple did not respond (HTTP {{status}}). Retrying in {{seconds}}s (attempt {{attempt}} of {{attempts}})…",
       "cancel": "Cancel",
       "authFailed": "Authentication failed",
       "addSuccess": "Account added successfully."
@@ -135,7 +132,6 @@
       "code": "2FA Verification Code",
       "verify": "Verify",
       "reauth": "Re-authenticate",
-      "noPassword": "This account was imported as a token bundle and has no password to sign in with. Remove it and add it again with an email and password.",
       "delete": "Delete Account",
       "confirmDelete": "Confirm Delete",
       "cancel": "Cancel",
@@ -441,9 +437,8 @@
       "invalidSinf": "Invalid sinf item",
       "noSinf": "No sinf found in response",
       "tooManyRedirects": "Too many redirects",
-      "versionLookupFailed": "Could not determine the latest version of this app for the fallback download",
-      "unexpectedResponse": "Unexpected response from Apple (HTTP {{status}})",
-      "fallbackMismatch": "Apple returned a different app or version than requested"
+      "versionLookupFailed": "Unable to resolve the latest iOS version in this account’s storefront. Check app availability in that region.",
+      "unexpectedItem": "Apple returned a different app or version; download stopped."
     },
     "purchase": {
       "paidNotSupported": "Purchasing paid apps is not supported",
@@ -461,7 +456,9 @@
       "emptyBody": "Authentication failed: server returned HTTP {{status}} with empty body",
       "missingAccountInfo": "Missing accountInfo in response",
       "missingAddress": "Missing address in response",
-      "unknownReason": "Authentication failed for an unknown reason"
+      "unknownReason": "Authentication failed for an unknown reason",
+      "transientFailure": "Authentication failed: Apple did not respond after {{attempts}} attempts (HTTP {{statuses}}). Please try again later.",
+      "retryLater": "Authentication failed: Apple asked to wait {{seconds}} seconds before trying again. Please try again later."
     }
   },
   "toast": {
@@ -470,6 +467,7 @@
       "downloadSuccess": "Download Success",
       "downloadFailed": "Download Failed",
       "licenseSuccess": "License Acquired",
+      "licenseOwned": "License Already Owned",
       "licenseFailed": "License Failed",
       "installStarted": "Installation Started",
       "shareAcquired": "Link Acquired",

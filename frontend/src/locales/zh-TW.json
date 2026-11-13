@@ -110,11 +110,8 @@
       "codePlaceholder": "000000",
       "codeHelp": "輸入來自您受信任裝置的驗證碼。",
       "signIn": "登入",
-      "preparingAssets": "正在準備簽名元件 {{percent}}%",
-      "preparingSigner": "正在初始化簽名器，約需一分鐘…",
-      "signingRequest": "正在簽署請求…",
-      "signerFailed": "簽名元件準備失敗：{{error}}",
       "verify": "驗證",
+      "retrying": "Apple 暫未回應（HTTP {{status}}），{{seconds}} 秒後重試（第 {{attempt}}/{{attempts}} 次）…",
       "cancel": "取消",
       "authFailed": "認證失敗",
       "addSuccess": "帳號新增成功。"
@@ -135,7 +132,6 @@
       "code": "雙重認證代碼",
       "verify": "驗證",
       "reauth": "重新認證",
-      "noPassword": "該帳號是以權杖方式匯入的，沒有密碼可用於登入。請刪除後用電子郵件和密碼重新新增。",
       "delete": "刪除帳號",
       "confirmDelete": "確認刪除",
       "cancel": "取消",
@@ -441,9 +437,8 @@
       "invalidSinf": "無效的 sinf 項目",
       "noSinf": "回應中找不到 sinf",
       "tooManyRedirects": "重新導向次數過多",
-      "versionLookupFailed": "無法取得備用下載所需的 App 最新版本",
-      "unexpectedResponse": "Apple 傳回了非預期的回應 (HTTP {{status}})",
-      "fallbackMismatch": "Apple 傳回的 App 或版本與請求不符"
+      "versionLookupFailed": "無法查詢帳號所在商店的最新 iOS 版本，請確認應用在該地區可用。",
+      "unexpectedItem": "Apple 回傳的應用或版本與請求不符，已停止下載。"
     },
     "purchase": {
       "paidNotSupported": "不支援購買付費應用程式",
@@ -461,7 +456,9 @@
       "emptyBody": "認證失敗：伺服器傳回 HTTP {{status}} 且回應主體為空",
       "missingAccountInfo": "回應中缺少 accountInfo",
       "missingAddress": "回應中缺少 address",
-      "unknownReason": "未知原因導致認證失敗"
+      "unknownReason": "未知原因導致認證失敗",
+      "transientFailure": "認證失敗：嘗試 {{attempts}} 次後 Apple 仍未回應（HTTP {{statuses}}），請稍後再試。",
+      "retryLater": "認證失敗：Apple 要求等待 {{seconds}} 秒後再試，請稍後再試。"
     }
   },
   "toast": {
@@ -470,6 +467,7 @@
       "downloadSuccess": "下載成功",
       "downloadFailed": "下載失敗",
       "licenseSuccess": "獲取授權成功",
+      "licenseOwned": "已擁有授權",
       "licenseFailed": "獲取授權失敗",
       "installStarted": "開始安裝",
       "shareAcquired": "連結已獲取",

@@ -103,16 +103,20 @@ After authentication, Apple returns a `pod` header:
 
 The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/services/wsProxy.ts`:
 
+- `s.mzstatic.com` — public SAP setup certificate
+- `fpinit.itunes.apple.com` — SAP setup exchange, browser TLS only
 - `auth.itunes.apple.com` — bag-resolved auth endpoint
 - `buy.itunes.apple.com` — purchase endpoint
 - `init.itunes.apple.com` — bag endpoint
 - `/^p\d+-buy\.itunes\.apple\.com$/` — pod-based hosts
-- `downloaddispatch.itunes.apple.com` — download dispatch endpoints (`/r/redownload`, then `/up/updateProduct`) used when volumeStore answers failureType 5002, an empty response, or "No Longer Available"
-- `uclient-api.itunes.apple.com` — public MDM catalog lookup (no cookies or DSID) that pins the latest external version id before a dispatch fallback
+- `downloaddispatch.itunes.apple.com` — redownload/update dispatch endpoints
+- `uclient-api.itunes.apple.com` — public iOS version lookup (no account headers/cookies)
 - Port restricted to `443` only
 - Direct IP targets blocked (`allow_direct_ip = false`)
 - Loopback IP targets blocked (`allow_loopback_ips = false`)
 - Private/reserved resolved IPs allowed (`allow_private_ips = true`) for Docker/OrbStack DNS translation while hostname allowlist remains the primary control
+
+Downloads, version lists, and version metadata share `frontend/src/apple/downloadProduct.ts`. Preserve explicit auth/license failures. For empty/unavailable volumeStore results or 5002, use bag-resolved redownload; for empty HTTP 500 or recoverable redownload results, use bag-resolved updateProduct. Dispatch requests pin an iOS version, and responses must match the app/bundle/version.
 
 ## Bag Proxy (Backend)
 
@@ -140,7 +144,8 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - `libcurl.js` (WASM) for browser-side TLS 1.3 via Mbed TLS — connects through Wisp protocol
 - `appleRequest()` in `frontend/src/apple/request.ts` wraps `libcurl.fetch` for all Apple API calls and forces HTTP/1.1 (`_libcurl_http_version: 1.1`)
 - Bag endpoint (`frontend/src/apple/bag.ts`) uses backend proxy (`/api/bag`) and falls back to `https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate` when `authenticateAccount` is missing or bag fetch fails
-- Authentication (`frontend/src/apple/authenticate.ts`) resolves bag endpoint, then sets `guid` via URL query manipulation to avoid duplicate/malformed query parameters
+- Authentication (`frontend/src/apple/authenticate.ts`) resolves bag endpoint, then sets `guid` via URL query manipulation to avoid duplicate/malformed query parameters. Transient responses (204, 404, 429, 5xx) are replayed up to three attempts, 10s then 20s apart, honoring a `Retry-After` of up to 30s (ipatool parity); the optional `onRetry` callback lets the sign-in screens show the wait
+- SAP signing (`frontend/src/apple/sap/`) is a direct browser implementation ported from ApplePackage. Fresh setup and `X-Apple-ActionSignature` are mandatory for authentication. Sign the exact UTF-8 body on every retry/redirect; retain the `Authenticator` across verification-code submissions. Never send credentials or SAP session material to backend HTTP endpoints, persist signer state, or fall back to unsigned authentication.
 - Plist build/parse (`frontend/src/apple/plist.ts`) uses native XML builder and browser-native `DOMParser`
 - Cookie helper (`frontend/src/apple/cookies.ts`) — `extractAndMergeCookies(rawHeaders, existingCookies)` replaces the repeated extract-and-merge pattern across all Apple protocol files
 
@@ -208,12 +213,21 @@ The settings endpoint (`/api/settings`) must never reflect request headers (`x-f
 ### Apple Protocol Error Codes
 
 - `2034` / `2042`: Token expired — re-authentication required
+- `5002` from `buyProduct`: license already owned (Apple pairs it with the generic "An unknown error has occurred"); treated as success with `alreadyOwned: true`, matching ipatool's `ErrLicenseAlreadyExists`
 - `customerMessage === 'Your password has changed.'`: Password token invalid
 - `action.url` ending in `termsPage`: Terms acceptance required (throw with URL)
-- `5002`, or an HTTP 200 with no `failureType`, no `customerMessage` and no `songList` (or a message-only "No Longer Available"): download fallback chain in `frontend/src/apple/downloadProduct.ts` — pin the version via the catalog lookup (enterprisestore → iphone → ipad), retry `/r/redownload`, then `/up/updateProduct` on an empty HTTP 500 or another empty/unavailable answer. updateProduct items are validated against the requested app id, version and bundle id
-- Message-only responses without items surface Apple's `customerMessage` instead of the generic "No items in response"
 
 ## Testing
+
+### Formatting
+
+Run the repository-pinned Prettier from the root. Its configuration enforces two-space indentation, semicolons, single quotes, and a 120-column wrap target.
+
+```bash
+npm ci
+npm run format
+npm run format:check
+```
 
 ### Unit Tests
 
@@ -412,7 +426,7 @@ When adding new common components, update this AGENTS.md file accordingly.
 const res = await fetch(url, { headers: authHeaders() });
 const blob = await res.blob();
 const blobUrl = URL.createObjectURL(blob);
-const a = document.createElement("a");
+const a = document.createElement('a');
 a.href = blobUrl;
 a.download = filename;
 a.click();
