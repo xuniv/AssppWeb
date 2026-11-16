@@ -54,7 +54,7 @@ jobs:
           BROWSERS: chromium,webkit
         run: node runtime/tests/browser.mjs frontend/public/store-runtime
       - name: Check verified Apple TLS and SAP through the actual Wisp server
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && !cancelled()
         env:
           BROWSERS: chromium
           LIVE_APPLE: '1'
