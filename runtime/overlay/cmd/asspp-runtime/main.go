@@ -148,6 +148,12 @@ func execute(input string) (result response) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
+	if req.Operation == "bridge-preflight" {
+		result.Value, err = bridgePreflight(ctx)
+		result.OK = err == nil
+		if err != nil { result.Error = "host_bridge_failed" }
+		return result
+	}
 	if req.Operation == "network-preflight" {
 		client := &http.Client{Transport: browsernet.NewTransport(), Timeout: 30 * time.Second}
 		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://init.itunes.apple.com/bag.xml?ix=6&guid=020000000001", nil)

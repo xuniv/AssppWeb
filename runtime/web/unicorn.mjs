@@ -119,6 +119,11 @@ export async function initializeUnicorn() {
           ranges = regions.map(([a, b]) => [BigInt(a), BigInt(b)]);
         },
         start(a, b, count) {
+          // A host callback often redirects PC to its return address. In that
+          // case there is no intercepted instruction to replay: carrying its
+          // skip token forward would suppress the next genuine call to the same
+          // stub. Keep tokens only when resuming that exact instruction.
+          if (skip) skip = new Set([...skip].filter((key) => key.endsWith(`:${BigInt(a)}`)));
           events = [];
           steps = 0;
           let error = '';

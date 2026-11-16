@@ -131,7 +131,12 @@ try {
           });
         try {
           const results = [];
-          const operations = ['preflight', 'adi-preflight', 'framework-preflight'];
+          const operations = [
+            'bridge-preflight',
+            'preflight',
+            ...Array(5).fill('adi-preflight'),
+            'framework-preflight',
+          ];
           if (liveApple) operations.push('network-preflight', 'sap-test');
           for (const operation of operations) {
             await reportStage(operation);
