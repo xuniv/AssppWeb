@@ -204,6 +204,7 @@ func execute(input string) (result response) {
 		mac[i] = hex.EncodeToString([]byte{b})
 	}
 	client := appstore.NewAppStore(appstore.Args{Keychain: keychain{req.State.Records}, CookieJar: cookies, OperatingSystem: operatingsystem.New(), Machine: identity(strings.Join(mac, ":"))})
+	defer appstore.CloseRuntime(client)
 	if encoded := req.State.Records["account"]; len(encoded) > 0 {
 		var stored appstore.Account
 		if json.Unmarshal(encoded, &stored) == nil && stored.DirectoryServicesID != "" &&

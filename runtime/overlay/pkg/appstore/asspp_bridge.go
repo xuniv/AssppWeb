@@ -23,6 +23,19 @@ type RuntimeSinf struct {
 	Data []byte `json:"sinf"`
 }
 
+// CloseRuntime releases per-operation connection pools in a long-lived client
+// process. The CLI normally releases these when its process exits.
+func CloseRuntime(client AppStore) {
+	if t, ok := client.(*appstore); ok {
+		if t.authBackend != nil {
+			t.authBackend.CloseIdleConnections()
+		}
+		if t.authHTTP != nil {
+			t.authHTTP.CloseIdleConnections()
+		}
+	}
+}
+
 // DownloadInfo exposes the metadata phase of the existing Download operation.
 // It does not fetch, modify, or persist an IPA and preserves explicit failures.
 func DownloadInfo(client AppStore, input DownloadInput) (RuntimeDownloadInfo, error) {
