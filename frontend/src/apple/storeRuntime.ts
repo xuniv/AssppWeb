@@ -77,7 +77,8 @@ function getWorker(): Worker {
       try {
         const db = await assets;
         if (data.method === 'readAsset') {
-          value.postMessage({ type: 'reply', id: data.id, value: (await db.get('images', data.payload.name)) ?? null });
+          const bytes: ArrayBuffer | undefined = await db.get('images', data.payload.name);
+          value.postMessage({ type: 'reply', id: data.id, value: bytes ?? null }, bytes ? [bytes] : []);
         } else if (data.method === 'writeAsset') {
           await db.put('images', data.payload.bytes, data.payload.name);
           value.postMessage({ type: 'reply', id: data.id, value: null });

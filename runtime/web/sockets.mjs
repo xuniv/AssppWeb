@@ -160,5 +160,9 @@ export function toBase64(bytes) {
 }
 export function fromBase64(text) {
   const value = atob(text);
-  return Uint8Array.from(value, (c) => c.charCodeAt(0));
+  // Array.from's string iterator builds an intermediate array of boxed values.
+  // A 30 MiB image can transiently consume hundreds of MiB in iOS WebContent.
+  const bytes = new Uint8Array(value.length);
+  for (let i = 0; i < value.length; i++) bytes[i] = value.charCodeAt(i);
+  return bytes;
 }

@@ -3,10 +3,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -98,6 +102,30 @@ type response struct {
 
 var gate sync.Mutex
 
+// Return fixed diagnostic codes, never raw Apple or transport error text.
+func failureCode(err error) string {
+	var unknown x509.UnknownAuthorityError
+	var hostname x509.HostnameError
+	var verification *tls.CertificateVerificationError
+	var operation *net.OpError
+	switch {
+	case errors.As(err, &unknown):
+		return "tls_untrusted_certificate"
+	case errors.As(err, &hostname):
+		return "tls_hostname_mismatch"
+	case errors.As(err, &verification):
+		return "tls_certificate_failed"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "request_timeout"
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return "connection_closed"
+	case errors.As(err, &operation):
+		return "connection_failed"
+	default:
+		return "operation_failed"
+	}
+}
+
 func execute(input string) (result response) {
 	gate.Lock()
 	defer gate.Unlock()
@@ -120,6 +148,24 @@ func execute(input string) (result response) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
+	if req.Operation == "network-preflight" {
+		client := &http.Client{Transport: browsernet.NewTransport(), Timeout: 30 * time.Second}
+		request, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://init.itunes.apple.com/bag.xml?ix=6&guid=020000000001", nil)
+		request.Header.Set("User-Agent", apphttp.DefaultUserAgent)
+		var received *http.Response
+		received, err = client.Do(request)
+		if err == nil {
+			result.Status = received.StatusCode
+			_, err = io.Copy(io.Discard, io.LimitReader(received.Body, 4<<20))
+			_ = received.Body.Close()
+		}
+		client.CloseIdleConnections()
+		result.OK = err == nil
+		if err != nil {
+			result.Error = failureCode(err)
+		}
+		return result
+	}
 	if req.Operation == "prepare" {
 		err = appstore.Prepare(ctx)
 		result.OK = err == nil
@@ -246,7 +292,7 @@ func execute(input string) (result response) {
 	result.State = state{Records: req.State.Records, Cookies: cookies.entries}
 	result.OK = err == nil
 	if err != nil {
-		result.Error = "operation_failed"
+		result.Error = failureCode(err)
 		switch {
 		case errors.Is(err, appstore.ErrAuthCodeRequired):
 			result.Error = "verification_required"

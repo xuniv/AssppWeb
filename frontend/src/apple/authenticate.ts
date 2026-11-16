@@ -51,7 +51,8 @@ export class Authenticator {
       if (result.state?.records) this.state = result.state;
       if (!result.ok)
         throw new AuthenticationError(
-          i18n.t('errors.runtime.request') + (result.status ? ` (HTTP ${result.status})` : ''),
+          i18n.t('errors.runtime.request') +
+            (result.status ? ` (HTTP ${result.status})` : ` (${result.error ?? 'operation_failed'})`),
           result.error === 'verification_required',
         );
       const value = result.value;

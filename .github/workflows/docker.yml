@@ -44,12 +44,20 @@ jobs:
           key: public-apple-macos27-26A434-arm64-v5
       - name: Build the client Store interpreter and public assets
         run: bash runtime/build.sh frontend/public/store-runtime
+      - name: Check native asset decoding memory
+        run: node runtime/tests/memory.mjs
       - name: Install Chromium and WebKit
         run: npx playwright install --with-deps chromium webkit
         working-directory: frontend
       - name: Check the actual interpreter in both browser engines
         env:
           BROWSERS: chromium,webkit
+        run: node runtime/tests/browser.mjs frontend/public/store-runtime
+      - name: Check verified Apple TLS and SAP through the actual Wisp server
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          BROWSERS: chromium
+          LIVE_APPLE: '1'
         run: node runtime/tests/browser.mjs frontend/public/store-runtime
       - run: npm run format:check
       - run: npm test && npm run build

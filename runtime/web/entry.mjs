@@ -1,7 +1,7 @@
 import './wasm_exec.js';
 import { createFilesystem } from './filesystem.mjs';
 import { initializeUnicorn } from './unicorn.mjs';
-import { WispSockets, nativeSockets, fromBase64, toBase64 } from './sockets.mjs';
+import { WispSockets, nativeSockets, fromBase64 } from './sockets.mjs';
 
 const revision = 'b352566155a667d8aaeabaa7ecec4966080f92ab';
 const cache = '/cache/ipatool/sap/apple-assets-macos-27-26A434-arm64-v5/';
@@ -24,7 +24,7 @@ async function initialize(value) {
   process.chdir = () => {};
   for (const name of names) {
     const data = await host.readAsset(name);
-    if (data) fs.add(cache + name, data);
+    if (data) fs.add(cache + name, data, true);
   }
   globalThis.assppSocket = host.socket;
   await initializeUnicorn();
@@ -50,7 +50,7 @@ async function invoke(input) {
       const result = JSON.parse(await execute(JSON.stringify({ operation: 'prepare', deviceID: '020000000001' })));
       if (!result.ok) throw new Error('Apple authentication assets could not be prepared');
       for (const file of fs.snapshot())
-        if (file.path.startsWith(cache) && names.includes(file.path.slice(cache.length)))
+        if (host.writeAsset && file.path.startsWith(cache) && names.includes(file.path.slice(cache.length)))
           await host.writeAsset(file.path.slice(cache.length), file.bytes);
       fs.clear();
       prepared = true;
@@ -73,13 +73,13 @@ function run(input) {
   chain = job.catch(() => {});
   return job;
 }
-function rpc(method, payload) {
+function rpc(method, payload, transfer = []) {
   const id = sequence++;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
     if (globalThis.webkit?.messageHandlers?.storeRuntime)
       webkit.messageHandlers.storeRuntime.postMessage({ id, method, payload });
-    else postMessage({ type: 'host', id, method, payload });
+    else postMessage({ type: 'host', id, method, payload }, transfer);
   });
 }
 function reply(message) {
@@ -104,7 +104,8 @@ if (globalThis.webkit?.messageHandlers?.storeRuntime) {
       const data = await rpc('readAsset', { name });
       return data ? fromBase64(data) : null;
     },
-    writeAsset: (name, data) => rpc('writeAsset', { name, data: toBase64(data) }),
+    // Native readAsset already checks and caches the packaged public images.
+    // Sending them back through JSON would duplicate all 78 MiB unnecessarily.
     progress: (stage) => void rpc('progress', { stage }),
   });
   initialization.then(
@@ -144,7 +145,10 @@ if (globalThis.webkit?.messageHandlers?.storeRuntime) {
           if (offset !== expected) throw new Error('Public asset has incorrect size');
           return output;
         },
-        writeAsset: (name, bytes) => rpc('writeAsset', { name, bytes: bytes.slice().buffer }),
+        writeAsset: (name, bytes) => {
+          const copy = bytes.slice().buffer;
+          return rpc('writeAsset', { name, bytes: copy }, [copy]);
+        },
         progress: (stage) => postMessage({ type: 'progress', stage }),
       });
       initialization.then(

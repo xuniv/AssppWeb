@@ -196,7 +196,7 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
     fchmod(_n, _mode, cb) {
       cb(null);
     },
-    add(p, data) {
+    add(p, data, takeOwnership = false) {
       p = normalize(p);
       const parts = p.split('/');
       for (let i = 2; i < parts.length; i++) {
@@ -205,8 +205,15 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
       }
       let f = files.get(p);
       if (!f) f = create(p);
-      resize(f, data.length);
-      f.bytes.set(data);
+      if (takeOwnership) {
+        if (allocated - f.bytes.length + data.byteLength > limit) throw failure('ENOSPC');
+        allocated += data.byteLength - f.bytes.length;
+        f.bytes = data;
+        f.size = data.byteLength;
+      } else {
+        resize(f, data.length);
+        f.bytes.set(data);
+      }
     },
     snapshot() {
       return [...files.entries()]

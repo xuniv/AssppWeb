@@ -7,6 +7,17 @@ import path from 'node:path';
 import { chromium, webkit } from '../../frontend/node_modules/playwright/index.mjs';
 
 const directory = path.resolve(process.argv[2] ?? 'frontend/public/store-runtime');
+const liveApple = process.env.LIVE_APPLE === '1';
+let wisp;
+if (liveApple) {
+  ({ server: wisp } = await import('../../backend/node_modules/@mercuryworkshop/wisp-js/src/entrypoints/server.mjs'));
+  wisp.options.hostname_whitelist = [
+    /^init\.itunes\.apple\.com$/,
+    /^s\.mzstatic\.com$/,
+    /^fpinit\.itunes\.apple\.com$/,
+  ];
+  wisp.options.port_whitelist = [443];
+}
 assert(existsSync(path.join(directory, 'runtime.wasm')), 'Build the client bundle before running this check');
 const sockets = new Set();
 const server = createServer(async (req, res) => {
@@ -45,6 +56,10 @@ server.on('connection', (socket) => {
   socket.on('close', () => sockets.delete(socket));
 });
 server.on('upgrade', (req, socket) => {
+  if (wisp) {
+    wisp.routeRequest(req, socket, Buffer.alloc(0));
+    return;
+  }
   const accept = createHash('sha1')
     .update(req.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
     .digest('base64');
@@ -72,7 +87,7 @@ try {
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto(`http://127.0.0.1:${address.port}`);
-      const output = await page.evaluate(async () => {
+      const output = await page.evaluate(async (liveApple) => {
         const worker = new Worker('/store-runtime/store-runtime.js');
         let id = 1,
           writes = 0,
@@ -116,7 +131,9 @@ try {
           });
         try {
           const results = [];
-          for (const operation of ['preflight', 'adi-preflight', 'framework-preflight']) {
+          const operations = ['preflight', 'adi-preflight', 'framework-preflight'];
+          if (liveApple) operations.push('network-preflight', 'sap-test');
+          for (const operation of operations) {
             await reportStage(operation);
             results.push({ operation, result: await run(operation) });
             await reportStage(operation + ' complete');
@@ -129,7 +146,7 @@ try {
         } finally {
           worker.terminate();
         }
-      });
+      }, liveApple);
       for (const item of output.results)
         assert.equal(item.result.ok, true, `${name} ${item.operation}: ${item.result.error}`);
       assert.equal(output.writes, 7);
