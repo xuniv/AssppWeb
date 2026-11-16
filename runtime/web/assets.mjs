@@ -3,7 +3,26 @@
 export async function compressedAsset(name, expected) {
   const response = await fetch(new URL(`assets/${name}.zlib`, location.href));
   if (!response.ok || !response.body) throw new Error('Public Apple asset unavailable');
-  const reader = response.body.pipeThrough(new DecompressionStream('deflate')).getReader();
+  // WebKit may deliver a whole cached response in one fetch chunk. Split input
+  // before decompression so its transform never expands an entire image at once.
+  const source = response.body.getReader();
+  let compressed = new Uint8Array();
+  const bounded = new ReadableStream({
+    async pull(controller) {
+      if (!compressed.length) {
+        const next = await source.read();
+        if (next.done) {
+          controller.close();
+          return;
+        }
+        compressed = next.value;
+      }
+      controller.enqueue(compressed.subarray(0, 16384));
+      compressed = compressed.subarray(16384);
+    },
+    cancel: () => source.cancel(),
+  });
+  const reader = bounded.pipeThrough(new DecompressionStream('deflate')).getReader();
   let pending = new Uint8Array(),
     offset = 0,
     finished = false;

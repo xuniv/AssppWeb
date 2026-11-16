@@ -49,7 +49,7 @@ async function invoke(input) {
     if (!prepared) {
       host.progress?.('preparing', 'assets');
       const result = JSON.parse(await execute(JSON.stringify({ operation: 'prepare', deviceID: '020000000001' })));
-      if (!result.ok) throw new Error('Apple authentication assets could not be prepared');
+      if (!result.ok) throw new Error(fs.publicErrorCode || 'asset_preparation_failed');
       fs.clear();
       prepared = true;
     }
@@ -140,8 +140,20 @@ if (globalThis.webkit?.messageHandlers?.storeRuntime) {
     if (data.type === 'run') {
       try {
         postMessage({ type: 'result', id: data.id, value: await run(data.input) });
-      } catch {
-        postMessage({ type: 'result', id: data.id, error: 'Store runtime failed to prepare or execute' });
+      } catch (error) {
+        const codes = [
+          'public_chunk_limit',
+          'public_image_size',
+          'public_read_position',
+          'public_bridge_failed',
+          'public_read_failed',
+          'asset_preparation_failed',
+        ];
+        postMessage({
+          type: 'result',
+          id: data.id,
+          error: codes.includes(error?.message) ? error.message : 'runtime_execution_failed',
+        });
       }
     }
     if (data.type === 'statistics') postMessage({ type: 'statistics', value: statistics() });

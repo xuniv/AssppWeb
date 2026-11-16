@@ -14,6 +14,7 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
     descriptors = new Map();
   let next = 3,
     allocated = 0;
+  let publicErrorCode = '';
   const normalize = (p) => {
     const parts = [];
     for (const bit of p.split('/')) {
@@ -141,7 +142,16 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
           buffer.set(bytes, offset);
           if (position === null) d.position += bytes.length;
           cb(null, bytes.length);
-        })().catch((error) => cb(error));
+        })().catch((error) => {
+          const codes = new Map([
+            ['Public image exceeds bounded size', 'public_chunk_limit'],
+            ['Public image exceeds pinned size', 'public_image_size'],
+            ['Public image read is not sequential', 'public_read_position'],
+            ['Client transport failed', 'public_bridge_failed'],
+          ]);
+          publicErrorCode = codes.get(error?.message) ?? 'public_read_failed';
+          cb(error);
+        });
         return;
       }
       perform(cb, () => {
@@ -265,6 +275,9 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
     },
     get allocated() {
       return allocated;
+    },
+    get publicErrorCode() {
+      return publicErrorCode;
     },
   };
   for (const method of ['chown', 'fchown', 'lchown', 'link', 'symlink', 'readlink', 'utimes'])
