@@ -206,7 +206,14 @@ func execute(input string) (result response) {
 	client := appstore.NewAppStore(appstore.Args{Keychain: keychain{req.State.Records}, CookieJar: cookies, OperatingSystem: operatingsystem.New(), Machine: identity(strings.Join(mac, ":"))})
 	if encoded := req.State.Records["account"]; len(encoded) > 0 {
 		var stored appstore.Account
-		if json.Unmarshal(encoded, &stored) == nil && stored.Email == req.Account.Email && stored.PasswordToken == req.Account.PasswordToken {
+		if json.Unmarshal(encoded, &stored) == nil && stored.DirectoryServicesID != "" &&
+			stored.DirectoryServicesID == req.Account.DirectoryServicesID && stored.PasswordToken == req.Account.PasswordToken {
+			if stored.StoreFront == "" {
+				stored.StoreFront = req.Account.StoreFront
+			}
+			if stored.Pod == "" {
+				stored.Pod = req.Account.Pod
+			}
 			req.Account = stored
 		}
 	}
