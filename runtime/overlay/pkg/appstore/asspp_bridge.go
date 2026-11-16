@@ -39,7 +39,16 @@ func DownloadInfo(client AppStore, input DownloadInput) (RuntimeDownloadInfo, er
 		return RuntimeDownloadInfo{}, err
 	}
 	guid := strings.ReplaceAll(strings.ToUpper(mac), ":", "")
-	result, _, err := t.sendDownloadProduct(ctx, input.Account, input.App, guid, input.ExternalVersionID, input.Platform)
+	externalVersionID := input.ExternalVersionID
+	if externalVersionID == "" && (input.Platform == PlatformAppleTV || input.Platform == PlatformWatchOS || input.Platform == PlatformVisionOS) {
+		externalVersionID, err = t.lookupLatestExternalVersionID(input.Account, input.App, input.Platform)
+		missingTVOffer := input.Platform == PlatformAppleTV &&
+			(errors.Is(err, errPlatformAppNotFound) || errors.Is(err, errPlatformOffersNotFound))
+		if err != nil && !missingTVOffer {
+			return RuntimeDownloadInfo{}, err
+		}
+	}
+	result, _, err := t.sendDownloadProduct(ctx, input.Account, input.App, guid, externalVersionID, input.Platform)
 	if err != nil {
 		return RuntimeDownloadInfo{}, err
 	}
@@ -50,13 +59,20 @@ func DownloadInfo(client AppStore, input DownloadInput) (RuntimeDownloadInfo, er
 	case FailureTypeLicenseNotFound:
 		return RuntimeDownloadInfo{}, ErrLicenseRequired
 	}
-	if err = validateDownloadResponse(result, input.App, input.ExternalVersionID, "download"); err != nil {
+	if err = validateDownloadResponse(result, input.App, externalVersionID, "download"); err != nil {
 		return RuntimeDownloadInfo{}, err
 	}
 	if result.Data.FailureType != "" || len(result.Data.Items) == 0 {
 		return RuntimeDownloadInfo{}, errors.New("Apple returned no downloadable package")
 	}
 	item := result.Data.Items[0]
+	packagePlatform, err := downloadPackagePlatform(input.Platform, item)
+	if err != nil {
+		return RuntimeDownloadInfo{}, err
+	}
+	if packagePlatform == PlatformMacOS {
+		return RuntimeDownloadInfo{}, errors.New("the IPA assembly host does not support macOS packages")
+	}
 	if item.URL == "" || len(item.Sinfs) == 0 {
 		return RuntimeDownloadInfo{}, errors.New("Apple returned incomplete package information")
 	}
@@ -75,6 +91,9 @@ func DownloadInfo(client AppStore, input DownloadInput) (RuntimeDownloadInfo, er
 	}
 	metadata["apple-id"] = input.Account.Email
 	metadata["userName"] = input.Account.Email
+	for _, key := range []string{"password", "passwordToken", "cookies", "authenticationToken"} {
+		delete(metadata, key)
+	}
 	output.ITunesMetadata, err = plist.Marshal(metadata, plist.BinaryFormat)
 	return output, err
 }
