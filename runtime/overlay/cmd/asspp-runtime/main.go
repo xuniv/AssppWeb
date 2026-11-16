@@ -351,7 +351,7 @@ func execute(input string) (result response) {
 	return result
 }
 func main() {
-	debug.SetMemoryLimit(160 << 20)
+	debug.SetMemoryLimit(128 << 20)
 	debug.SetGCPercent(25)
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	http.DefaultTransport = browsernet.NewTransport()

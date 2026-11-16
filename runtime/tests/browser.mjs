@@ -97,7 +97,7 @@ try {
         for (let pass = 0; pass < 8; pass++)
           for (const row of rows) if (descendants.has(Number(row[2]))) descendants.add(Number(row[1]));
         for (const row of rows)
-          if (descendants.has(Number(row[1])) && /--type=renderer|WebKitWebProcess/.test(row[4]))
+          if (descendants.has(Number(row[1])) && /--type=renderer|(?:WebKit|WPE)WebProcess/.test(row[4]))
             peakContentKiB = Math.max(peakContentKiB, Number(row[3]));
       } catch {
         /* RSS measurement is optional outside Unix CI. */
@@ -106,7 +106,10 @@ try {
     const monitor = setInterval(sample, 200);
     try {
       const page = await browser.newPage();
-      await page.exposeFunction('reportStage', (stage) => console.log(name + ': ' + stage));
+      await page.exposeFunction('reportStage', (stage) => {
+        sample();
+        console.log(name + ': ' + stage + ` (peak RSS ${peakContentKiB} KiB)`);
+      });
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto(`http://127.0.0.1:${address.port}`);

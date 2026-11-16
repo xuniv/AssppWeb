@@ -20,7 +20,7 @@ import hashlib,pathlib,sys
 root=pathlib.Path(sys.argv[1])
 for name,digest in {
  'overlay/internal/browsernet/roots.crt':'aec261c5aa569a1fdef65e119eeb839cd9cfafc2641b9c8b15f168cbe18145ca',
- 'vendor/unicorn-arm64.mjs':'527bb6c96944752f4b1ad8256c9e681a2a0fdcd63a947e5db35852885f412330'
+ 'vendor/unicorn-arm64.mjs':'77275db68fda0284e9ca375239c4559e38af8ac34de5aedf4377a52d6aff1ca0'
 }.items():
  if hashlib.sha256((root/name).read_bytes()).hexdigest()!=digest:raise SystemExit('Runtime dependency digest mismatch: '+name)
 PY

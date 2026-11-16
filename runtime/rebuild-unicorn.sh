@@ -26,6 +26,9 @@ import pathlib,sys
 path=pathlib.Path(sys.argv[1]);lines=path.read_text().splitlines(keepends=True)
 assert not lines[1].strip();lines[1]='\n'
 text=''.join(lines)
+needle='var overGrownHeapSize=oldSize*(1+.2/cutDown);'
+assert text.count(needle)==1
+text=text.replace(needle,'var overGrownHeapSize=oldSize+2097152/cutDown;')
 needle='Module["heapByteLength"]=function(){return HEAPU8.byteLength};'
 assert text.count(needle)==1
 path.write_text(text.replace(needle,needle+'Module["heapBytes"]=function(){return HEAPU8};'))

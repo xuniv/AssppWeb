@@ -52,6 +52,12 @@ for mapping in ['functions', 'slots']:
     for address := range '''+mapping+''' { addresses = append(addresses, address) }
     sort.Slice(addresses, func(i,j int)bool{return addresses[i]<addresses[j]})
     for _, address := range addresses { name := '''+mapping+'''[address]''')
+needle = '\tready = true\n\n\treturn machine, exports, nil'
+assert text.count(needle) == 1
+text = text.replace(needle, '''// Intern immutable image pages before loading another ADI guest, rather
+    // than retaining four complete private image copies until first execution.
+    if err := engine.SealSharedPages(); err != nil { return nil, nil, err }
+'''+needle)
 path.write_text(text)
 (destination / 'pkg/keychain/keychain.go').write_text('package keychain\ntype Keychain interface { Get(string)([]byte,error);Set(string,[]byte)error;Remove(string)error }\n')
 path = destination / 'pkg/appstore/appstore_revoke.go'

@@ -10,7 +10,7 @@ export async function initializeUnicorn() {
     create() {
       const engine = new uc.Unicorn(uc.ARCH_ARM64, uc.MODE_ARM);
       engine.ctl_set_cpu_model(uc.CPU_ARM64_MAX);
-      engine.ctl_set_tcg_buffer_size(4 * 1024 * 1024);
+      engine.ctl_set_tcg_buffer_size(1024 * 1024);
       const memory = pool.create(engine);
       const hooks = new Map();
       const broadHooks = new Set();

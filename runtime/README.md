@@ -51,11 +51,15 @@ only bridge calls cross into Go. Guest instruction/time limits remain enforced.
 
 Public images stream into Go through 64 KiB reads, rather than being kept as a
 second complete JS filesystem copy. Native IPC uses the same bounded chunks.
+Each loaded guest interns its image pages before the next guest loads.
 Unicorn code/data pages are interned only after exact comparison, protected
 read-only and copied on write outside the active CPU callback. Every unmapped
 page starts at zero. Cached pages are freed when the last guest closes.
-The additional vendor JS export exposes its existing WASM heap view; the
-embedded Unicorn WASM code is unchanged and rebuild-unicorn.sh reproduces it.
+The additional vendor JS export exposes its existing WASM heap view, and its
+allocator grows in bounded 2 MiB steps instead of reserving 20% extra RAM.
+The embedded Unicorn WASM code is unchanged; rebuild-unicorn.sh reproduces
+these JS adjustments. Each guest uses a 1 MiB translation buffer and Go has
+a 128 MiB soft heap target.
 
 Go/JS read and write staging buffers are reused, dispatch policies are updated
 only when their complete address sets change, and emulation periodically yields
