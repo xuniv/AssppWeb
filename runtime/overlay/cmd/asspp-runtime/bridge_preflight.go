@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -19,6 +20,24 @@ func bridgePreflight(ctx context.Context) (any, error) {
 	defer engine.Close()
 	if err = engine.MemMap(0x1000, 0x3000); err != nil {
 		return nil, err
+	}
+	// Native anonymous mappings are zero-filled, including after address reuse.
+	// Probe the middle of a recycled page rather than allocator metadata at zero.
+	if err = engine.MemWrite(0x2000, bytes.Repeat([]byte{0xa5}, 0x1000)); err != nil {
+		return nil, err
+	}
+	if err = engine.MemUnmap(0x2000, 0x1000); err != nil {
+		return nil, err
+	}
+	if err = engine.MemMap(0x2000, 0x1000); err != nil {
+		return nil, err
+	}
+	clean, err := engine.MemRead(0x2800, 64)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(clean, make([]byte, len(clean))) {
+		return nil, errors.New("recycled guest memory was not zero-filled")
 	}
 	instructions := []uint32{0x94000400, 0xaa0003f3, 0x940003fe, 0x8b000260, 0xd61f0280}
 	code := make([]byte, len(instructions)*4)

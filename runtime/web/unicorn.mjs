@@ -2,6 +2,7 @@ import loadUnicorn from '../vendor/unicorn-arm64.mjs';
 
 export async function initializeUnicorn() {
   const uc = await loadUnicorn();
+  const zeros = new Uint8Array(65536);
   globalThis.assppUnicorn = {
     memoryBytes: () => uc.heapByteLength(),
     create() {
@@ -11,13 +12,21 @@ export async function initializeUnicorn() {
       const hooks = new Map();
       const lazy = [];
       const lazyBases = new Set(['52776558133248', '70368744177664', '87960930222080']);
+      const mapZeroed = (address, size) => {
+        engine.mem_map(address, size, uc.PROT_ALL);
+        // Unicorn.js replaces anonymous mmap with aligned malloc. Recycled
+        // allocations therefore contain old guest data, unlike native Unicorn.
+        // Explicitly preserve zero-filled RAM/BSS semantics on every mapping.
+        for (let offset = 0; offset < size; offset += zeros.length)
+          engine.mem_write(address + BigInt(offset), zeros.subarray(0, Math.min(zeros.length, size - offset)));
+      };
       const ensure = (address, size) => {
         const end = address + BigInt(size),
           region = lazy.find((r) => address >= r.begin && end <= r.end);
         if (!region) return false;
         for (let page = address & ~65535n; page < end; page += 65536n) {
           if (!region.pages.has(page)) {
-            engine.mem_map(page, 65536, uc.PROT_ALL);
+            mapZeroed(page, 65536);
             region.pages.add(page);
           }
         }
@@ -40,7 +49,7 @@ export async function initializeUnicorn() {
           if (lazyBases.has(a)) {
             if (lazy.some((r) => r.begin === BigInt(a))) throw new Error('Guest region already mapped');
             lazy.push({ begin: BigInt(a), end: BigInt(a) + BigInt(n), pages: new Set() });
-          } else engine.mem_map(BigInt(a), Number(n), uc.PROT_ALL);
+          } else mapZeroed(BigInt(a), Number(n));
         },
         unmap(a, n) {
           const index = lazy.findIndex((r) => r.begin === BigInt(a) && r.end === BigInt(a) + BigInt(n));
