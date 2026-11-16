@@ -6,5 +6,8 @@ mnt/
 tunnel/
 CLAUDE.md
 
-# Generated fixed SAP algorithm tables.
-frontend/src/apple/sap/tables.json
+
+# Generated third-party engine and compiler support.
+runtime/vendor/
+runtime/web/wasm_exec.js
+runtime/licenses/

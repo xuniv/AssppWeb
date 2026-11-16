@@ -140,3 +140,6 @@ references/
 mnt/
 tunnel/
 deploy.sh
+
+# Client Store runtime build outputs.
+frontend/public/store-runtime/
