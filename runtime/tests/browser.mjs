@@ -187,8 +187,10 @@ try {
         { liveApple, provisioning },
       );
       console.log(JSON.stringify({ browser: name, peakContentKiB, ...output }));
-      for (const item of output.results)
+      for (const item of output.results) {
         assert.equal(item.result.ok, true, `${name} ${item.operation}: ${item.result.error}`);
+        if (item.operation === 'anisette-preflight') assert.equal(item.result.value.proofReady, true);
+      }
       assert.equal(output.writes, 0);
       assert.equal(output.bytes, 0);
       assert.equal(output.statistics.workspaceBytes, 0);
