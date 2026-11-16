@@ -6,9 +6,11 @@ A web-based tool for acquiring and installing iOS apps outside the App Store. Au
 
 ## Zero-Trust Architecture
 
-AssppWeb uses a zero-trust design where the server **never sees your Apple credentials**. All Apple API communication happens directly in your browser via WebAssembly (libcurl.js with Mbed TLS 1.3). The server only acts as a blind TCP relay (Wisp protocol) and handles IPA compilation from public CDN downloads.
+AssppWeb uses a zero-trust design where the server **never sees your Apple credentials**. All Apple API communication and verified TLS happen inside a browser Web Worker through the pinned Go/WebAssembly Store runtime. The server only acts as a blind TCP relay (Wisp protocol) and handles IPA compilation from public CDN downloads.
 
-Authentication uses a fresh browser-side SAP exchange and signs the exact request body with `X-Apple-ActionSignature`. Verification-code submissions reuse the same in-memory session. The direct algorithm is ported from ApplePackage and includes no Apple executable or private framework.
+Authentication runs the modern ipatool ARM64 SAP and Store framework implementation in a WebAssembly interpreter, including Anisette, Store AMD and KBSync. No hosted authentication service is used. The first browser session downloads approximately 53 MB of compressed, pinned public Apple data; account and provisioning state stay in browser IndexedDB. Existing accounts should sign in again once after upgrading.
+
+See [the client runtime](runtime/README.md) for pinned source revisions, public-asset hashes, licenses and rebuild instructions. Native Asspp uses the same interpreter inside the app without a self-hosted server.
 
 > **⚠️ Important Security Notice:** There are no official Asspp Web instances. Use any public instance at your own risk. While the backend cannot read your encrypted traffic, a malicious host could serve a modified frontend to capture your credentials before encryption. Therefore, **do not blindly trust public instances**. We strongly recommend self-hosting your own instance or using one provided by a trusted partner. Always verify the SSL certificate and ensure you are connecting to a secure, authentic endpoint.
 

@@ -11,59 +11,30 @@
 
 - `backend/` — Node.js/Express server (TypeScript, ESM)
 - `frontend/` — React SPA (TypeScript, Vite, Tailwind CSS)
-- `e2e/` — Playwright E2E tests (pnpm)
-- `references/ApplePackage/` — Swift reference implementation (source of truth)
+- `runtime/tests/` — actual interpreter checks in Chromium and WebKit (Playwright)
+- `references/ApplePackage/` — Swift UI-model reference (optional local checkout)
+- `runtime/` — pinned client-side Store engine, public assets and reproducible build adapters
 - Multi-stage Docker build (single container serves both)
 
-## Architecture — Zero-Trust
+## Architecture — Client Store runtime
 
 The server is a blind TCP proxy. It NEVER sees Apple credentials.
 
-```
-┌─ Browser (Client) ─────────────────────────────────┐
-│  Credentials (IndexedDB): email, password, cookies, │
-│    passwordToken, DSID, deviceIdentifier, pod       │
-│                                                      │
-│  Apple Protocol (libcurl.js WASM + Mbed TLS 1.3):   │
-│    1. Bag fetch → backend proxy → resolve auth URL   │
-│       (fallback to default auth endpoint if missing)  │
-│    2. Authenticate → get token, cookies, pod         │
-│    3. Purchase → acquire license                     │
-│    4. Download info → get CDN URL + SINFs + metadata │
-│    5. Version listing/lookup                         │
-│                                                      │
-│  TLS 1.3 encrypted via Wisp protocol over WebSocket  │
-└──────────────────────┬───────────────────────────────┘
-                       │ Wisp-multiplexed TCP (server cannot read)
-┌─ Server (Wisp Proxy) ┴──────────────────────────────┐
-│  Wisp server (@mercuryworkshop/wisp-js) on /wisp/    │
-│  → multiplexed TCP relay (blind tunnel, no decrypt)  │
-│                                                      │
-│  Bag proxy: GET /api/bag?guid=<id>                   │
-│    - Fetches init.itunes.apple.com/bag.xml via HTTPS │
-│    - Returns public Apple service URLs (no creds)    │
-│                                                      │
-│  After client obtains download info:                 │
-│    Client POSTs: { downloadURL, sinfs, metadata }    │
-│    - downloadURL = Apple CDN (public, no auth)       │
-│    - sinfs = DRM signatures (base64)                 │
-│    - iTunesMetadata = app metadata plist (base64)    │
-│                                                      │
-│  Server downloads IPA from CDN, injects SINFs +      │
-│  iTunesMetadata, stores compiled IPA, serves via     │
-│  public install URL (itms-services manifest)         │
-└──────────────────────────────────────────────────────┘
-```
-
-**Key invariant**: The server NEVER sees Apple credentials. All Apple TLS terminates at the browser via libcurl.js WASM (Mbed TLS 1.3). The server only receives public CDN URLs and non-secret metadata for IPA compilation. The bag proxy (`/api/bag`) only returns public Apple service URLs — no credentials pass through it.
+- `runtime/` pins ipatool's modern ARM64 SAP, Store framework, Anisette, Store AMD and KBSync implementation. Read `runtime/README.md` before changing the protocol or the guest bridge.
+- The browser runs Go/WASM plus Unicorn's TCG interpreter in a Web Worker. Go terminates Apple TLS inside the worker. `runtime/web/sockets.mjs` carries encrypted TCP through Wisp; the backend never receives plaintext login, token or provisioning requests.
+- Account/provisioning records remain in client IndexedDB. The separate public-image database contains only immutable, hash-verified Apple images. Active SAP signer contexts are never persisted.
+- Build-time extraction obtains pinned public images from Apple's official restore CDN and packages compressed data with the app/image. Browsers decompress bounded images, verify their hashes in the Go loader, and cache them locally. Do not parse large restore images inside iOS WebContent processes.
+- The native Asspp app reuses this client runtime in its bundled WKWebView and opens TCP directly with Network.framework. It requires no hosted signer or authentication server.
+- After obtaining download information, the browser sends only the existing CDN URL, SINFs and iTunes metadata to the backend for IPA assembly. Keep credentials and runtime state out of these requests.
+- Keep TLS certificate/hostname verification enabled. The pinned public CA bundle includes Mozilla roots and Apple Root CA. Never add environment-specific proxy roots to published artifacts.
 
 ## Reference Implementation
 
-The Swift reference at `references/ApplePackage/` is the source of truth for Apple protocol behavior:
+The Swift reference at `references/ApplePackage/` documents the UI model mappings. The pinned ipatool revision in `runtime/` is authoritative for authentication and Store operations:
 
 - Field mappings (iTunes API → Software type) use Swift `CodingKeys`
-- Authentication flow, bag endpoint, pod routing, error codes
-- Always consult the reference when making protocol changes
+- Preserve the upstream ipatool authentication/provisioning/download sequence and typed failures
+- Keep frontend adapters limited to client state and UI-model translation
 
 ### iTunes API Field Mapping
 
@@ -99,24 +70,11 @@ After authentication, Apple returns a `pod` header:
 - Pod is stored on the Account object and used for all subsequent API calls
 - Functions: `storeAPIHost(pod?)` and `purchaseAPIHost(pod?)` in `frontend/src/apple/config.ts`
 
-## Apple's Edge Sheds This Route
+## Protocol changes
 
-Apple's edge refuses a share of the requests to the authenticate route before they reach the service that checks credentials. Measured from a clean residential network, fifteen identical POSTs to the legacy endpoint came back:
+Do not reduce authentication to legacy SAP signing plus endpoint retries. Modern Store requests require framework-generated requests, machine provisioning, Store AMD proofs and KBSync. Keep login, purchase, downloads and both version operations on the same pinned runtime. Preserve explicit credential, 2FA, token and license failures. Retrying a real credential failure is not a transport recovery.
 
-```
-503 204 403 403 403 204 404 403 500 403 301 301 503 404 403
-```
-
-Only the 403s carried `x-responding-instance` and `apple-timing-app`, so only about 40% reached MZFinance. A bogus path on the same host answered a stable 404 throughout and the bag host a stable 200, so the shedding is per route — not per request shape, and not the client. Body, `Content-Type`, method, User-Agent and the presence of `X-Apple-ActionSignature` make no difference. The reach rate also varies by outbound IP and over time; a second network measured 15–20%, and one exit measured 0% for an hour while the bag host stayed at 200.
-
-Two consequences in `authenticate.ts`:
-
-- **Eight attempts, 2s apart.** At a 40% reach rate three attempts miss the service outright 22% of the time and eight miss 2%. The refusals come back in milliseconds, so there is no overload to back off from — only another draw to take. A `Retry-After` is still honored.
-- **Each retry goes to the next endpoint.** `authEndpoints()` builds the rotation from the bag endpoint, the legacy `MZFinance` endpoint and the native `/auth/v1/native/fast/` one, deduplicated; today the bag advertises the legacy one, so that is two distinct targets. Replaying a single endpoint draws from the same pool each time. The bag URL itself is still validated rather than skipped, so a bag pointing somewhere unapproved fails the sign-in.
-
-One signature serves every attempt: all three candidates are in Apple's SAP-signed list, take the same body, and a signature covers the body alone. `ipatool#513` reports the legacy endpoint answering 302 to a `p{pod}-buy` host where reposting the body returns 200, which the redirect handling already follows with the POST and body intact.
-
-Neither ipatool nor this project can fix the shedding itself; ipatool 2.5.0 still reports it. A failure whose statuses carried no Apple service header is reported as `errors.auth.edgeRefused`, separately from `errors.auth.transientFailure`, because the advice differs: one is Apple's edge, the other a service that answered badly. Refusal diagnostics log only content type, length, and Retry-After under `[Auth]`; never log tokens, cookies, redirect queries, or correlation identifiers. Non-plist 403 responses are retryable like current ipatool; populated Apple credential errors and 2FA challenges are not replayed.
+Browser/guest errors may expose only allowlisted error codes and numeric HTTP status. Do not retain raw Apple responses, cookies, tokens, signatures, redirect queries, correlation identifiers or evaluated WKWebView arguments in logs.
 
 ## Dynamic Host Validation (Backend)
 
@@ -130,12 +88,14 @@ The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/
 - `/^p\d+-buy\.itunes\.apple\.com$/` — pod-based hosts
 - `downloaddispatch.itunes.apple.com` — redownload/update dispatch endpoints
 - `uclient-api.itunes.apple.com` — public iOS version lookup (no account headers/cookies)
+- `gsa.apple.com` — Anisette and Store AMD provisioning, client TLS only
+- `www.apple.com` — public Apple root certificate
 - Port restricted to `443` only
 - Direct IP targets blocked (`allow_direct_ip = false`)
 - Loopback IP targets blocked (`allow_loopback_ips = false`)
 - Private/reserved resolved IPs allowed (`allow_private_ips = true`) for Docker/OrbStack DNS translation while hostname allowlist remains the primary control
 
-Downloads, version lists, and version metadata share `frontend/src/apple/downloadProduct.ts`. Preserve explicit auth/license failures. For empty/unavailable volumeStore results or 5002, use bag-resolved redownload; for empty HTTP 500 or recoverable redownload results, use bag-resolved updateProduct. Dispatch requests pin an iOS version, and responses must match the app/bundle/version.
+Downloads, licensing and version operations use the pinned ipatool implementation through `frontend/src/apple/storeRuntime.ts`. Preserve typed auth/license failures. Do not restore a separate browser implementation of legacy `volumeStore` retries.
 
 ## Bag Proxy (Backend)
 
@@ -169,12 +129,10 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - Tailwind CSS 4 for styling
 - Vite for build tooling
 - IndexedDB for credential storage (via `idb`)
-- `libcurl.js` (WASM) for browser-side TLS 1.3 via Mbed TLS — connects through Wisp protocol
-- `appleRequest()` in `frontend/src/apple/request.ts` wraps `libcurl.fetch` for all Apple API calls and forces HTTP/1.1 (`_libcurl_http_version: 1.1`)
-- Bag endpoint (`frontend/src/apple/bag.ts`) uses backend proxy (`/api/bag`) and falls back to `https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate` when `authenticateAccount` is missing or bag fetch fails
-- Authentication (`frontend/src/apple/authenticate.ts`) resolves bag endpoint, then sets `guid` via URL query manipulation to avoid duplicate/malformed query parameters. Transient responses (204, 404, 429, 5xx) are replayed up to eight attempts, 2s apart, each on the next candidate endpoint, honoring a `Retry-After` of up to 30s; the optional `onRetry` callback lets the sign-in screens show the wait. See **Apple's Edge Sheds This Route** below
-- The `Authenticator` takes the previously stored `store` and `pod` so a renewal whose response omits those headers does not blank them. A blank `store` hides the account from every region filter, and a lost `pod` sends later calls to the wrong host
-- SAP signing (`frontend/src/apple/sap/`) is a direct browser implementation ported from ApplePackage. Fresh setup and `X-Apple-ActionSignature` are mandatory for authentication. Sign the exact UTF-8 body on every retry/redirect; retain the `Authenticator` across verification-code submissions. Never send credentials or SAP session material to backend HTTP endpoints, persist signer state, or fall back to unsigned authentication.
+- Store protocol and verified TLS execute in `runtime/`, loaded from `/store-runtime/store-runtime.js` in a dedicated worker.
+- `apple/storeRuntime.ts` serializes client state transactions and keeps provisioning state in IndexedDB. Backend HTTP endpoints never receive that state.
+- `Authenticator` is retained across 2FA submissions. Storefront and pod omissions retain the previous routing. Existing accounts should sign in again once after the runtime migration.
+- Keep the public-image IndexedDB cache separate from account records. Cache failures must not prevent authentication when the packaged public images remain available.
 - Plist build/parse (`frontend/src/apple/plist.ts`) uses native XML builder and browser-native `DOMParser`
 - Cookie helper (`frontend/src/apple/cookies.ts`) — `extractAndMergeCookies(rawHeaders, existingCookies)` replaces the repeated extract-and-merge pattern across all Apple protocol files
 

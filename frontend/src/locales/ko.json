@@ -461,6 +461,10 @@
       "transientFailure": "인증 실패: {{attempts}}번 시도했지만 Apple이 응답하지 않았습니다(HTTP {{statuses}}). 잠시 후 다시 시도해 주세요.",
       "edgeRefused": "인증 실패: {{attempts}}번 시도했지만 Apple 로그인 서비스의 응답을 받지 못했습니다(HTTP {{statuses}}). Apple 에지의 일시적인 요청 거부일 수 있습니다. 잠시 후 다시 시도해 주세요.",
       "retryLater": "인증 실패: Apple이 {{seconds}}초 후에 다시 시도하라고 요청했습니다. 잠시 후 다시 시도해 주세요."
+    },
+    "runtime": {
+      "request": "Apple이 요청을 완료하지 못했습니다. 계정에 다시 로그인해 주세요.",
+      "busy": "이미 인증을 진행 중입니다."
     }
   },
   "toast": {
@@ -506,5 +510,9 @@
     "qr": "QR 코드",
     "delete": "삭제",
     "confirmDelete": "{{name}}을(를) 삭제하고 설치 링크를 만료시킬까요?"
+  },
+  "runtime": {
+    "preparing": "Apple 인증을 준비 중입니다. 처음에는 약 80MB를 다운로드합니다.",
+    "running": "Apple과 통신 중…"
   }
 }

@@ -1,156 +1,62 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildPlist } from '../../src/apple/plist';
-import { authenticate } from '../../src/apple/authenticate';
-import { appleRequest } from '../../src/apple/request';
-import { fetchBag } from '../../src/apple/bag';
-
-vi.mock('../../src/apple/sap', () => ({
-  connectSAP: vi.fn(async () => ({ sign: async () => Uint8Array.of(1, 2, 3) })),
-}));
-
-vi.mock('../../src/apple/request', () => ({
-  appleRequest: vi.fn(),
-}));
-
-vi.mock('../../src/apple/bag', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../src/apple/bag')>()),
-  fetchBag: vi.fn(),
-  defaultAuthURL: 'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
-}));
-
-describe('apple/authenticate', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+import { Authenticator, AuthenticationError } from '../../src/apple/authenticate';
+import { runStore } from '../../src/apple/storeRuntime';
+vi.mock('../../src/apple/storeRuntime', () => ({ runStore: vi.fn() }));
+const state = { records: { 'anisette-v4': 'synthetic-state' }, cookies: [] };
+const value = {
+  email: 'test@example.invalid',
+  passwordToken: 'synthetic-token',
+  directoryServicesIdentifier: '123',
+  name: 'Test User',
+  storeFront: '143441-1',
+  pod: '26',
+};
+describe('client runtime authentication', () => {
+  beforeEach(() => vi.clearAllMocks());
+  it('retains provisioning state for 2FA and keeps the code separate from the password', async () => {
+    vi.mocked(runStore)
+      .mockResolvedValueOnce({ ok: false, error: 'verification_required', value: {}, state })
+      .mockResolvedValueOnce({ ok: true, value, state });
+    const session = new Authenticator('020000000001');
+    await expect(session.authenticate('test@example.invalid', 'synthetic-password')).rejects.toMatchObject({
+      codeRequired: true,
+    });
+    const account = await session.authenticate('test@example.invalid', 'synthetic-password', '123456');
+    expect(vi.mocked(runStore).mock.calls[1][0]).toMatchObject({
+      password: 'synthetic-password',
+      code: '123456',
+      state,
+    });
+    expect(account).toMatchObject({
+      store: '143441',
+      pod: '26',
+      runtimeState: state,
+      deviceIdentifier: '020000000001',
+    });
   });
-
-  // A renewal replaces the stored account wholesale, and Apple sends these
-  // headers on some responses only. Without a fallback the storefront blanks,
-  // which hides the account from every region filter, and the pod is lost.
-  it('keeps the previous storefront and pod when the response omits them', async () => {
-    vi.mocked(fetchBag).mockResolvedValue({
-      authURL: 'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
+  it('preserves previous routing when an auth response omits it', async () => {
+    vi.mocked(runStore).mockResolvedValue({
+      ok: true,
+      value: { ...value, storeFront: undefined, pod: undefined },
+      state,
     });
-    vi.mocked(appleRequest).mockResolvedValue({
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      rawHeaders: [],
-      body: buildPlist({
-        accountInfo: { appleId: 'test@example.com', address: {} },
-        passwordToken: 'token',
-        dsPersonId: '123',
-      }),
-    });
-
-    const account = await authenticate(
-      'test@example.com',
-      'password',
-      undefined,
-      undefined,
-      'aabbccddeeff',
-      undefined,
-      { store: '143460', pod: '7' },
+    const account = await new Authenticator('020000000001', [], { store: '143462', pod: '25' }).authenticate(
+      '+821000000000',
+      'synthetic-password',
     );
-
-    expect(account.store).toBe('143460');
-    expect(account.pod).toBe('7');
-  });
-
-  it('prefers the storefront and pod the response does send', async () => {
-    vi.mocked(fetchBag).mockResolvedValue({
-      authURL: 'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
-    });
-    vi.mocked(appleRequest).mockResolvedValue({
-      status: 200,
-      statusText: 'OK',
-      headers: { 'x-set-apple-store-front': '143441-1,29', pod: '25' },
-      rawHeaders: [],
-      body: buildPlist({
-        accountInfo: { appleId: 'test@example.com', address: {} },
-        passwordToken: 'token',
-        dsPersonId: '123',
-      }),
-    });
-
-    const account = await authenticate(
-      'test@example.com',
-      'password',
-      undefined,
-      undefined,
-      'aabbccddeeff',
-      undefined,
-      { store: '143460', pod: '7' },
-    );
-
-    expect(account.store).toBe('143441');
+    expect(account.store).toBe('143462');
     expect(account.pod).toBe('25');
   });
-
-  it('sets guid query exactly once from bag endpoint', async () => {
-    vi.mocked(fetchBag).mockResolvedValue({
-      authURL: 'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate?foo=1&guid=old-value',
-    });
-    vi.mocked(appleRequest).mockResolvedValue({
-      status: 200,
-      statusText: 'OK',
-      headers: {},
-      rawHeaders: [],
-      body: buildPlist({
-        accountInfo: {
-          appleId: 'test@example.com',
-          address: {
-            firstName: 'Test',
-            lastName: 'User',
-          },
-        },
-        passwordToken: 'token',
-        dsPersonId: '123',
-      }),
-    });
-
-    await authenticate('test@example.com', 'password', undefined, undefined, 'aabbccddeeff');
-
-    const requestCall = vi.mocked(appleRequest).mock.calls[0][0];
-    const endpoint = new URL(`https://${requestCall.host}${requestCall.path}`);
-
-    expect(endpoint.pathname).toBe('/WebObjects/MZFinance.woa/wa/authenticate/');
-    expect(endpoint.searchParams.get('guid')).toBe('aabbccddeeff');
-    expect(endpoint.searchParams.getAll('guid')).toHaveLength(1);
-    expect(endpoint.searchParams.get('foo')).toBe('1');
+  it('shows only a safe code/status instead of raw Apple responses', async () => {
+    vi.mocked(runStore).mockResolvedValue({ ok: false, error: 'operation_failed', status: 503, value: {}, state });
+    await expect(
+      new Authenticator('020000000001').authenticate('test@example.invalid', 'synthetic-password'),
+    ).rejects.toThrow('HTTP 503');
   });
-  it.each([301, 302, 303, 307, 308])(
-    'normalizes a relative legacy redirect (%s) and preserves its query',
-    async (status) => {
-      vi.mocked(fetchBag).mockResolvedValue({
-        authURL: 'https://p25-buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
-      });
-      vi.mocked(appleRequest)
-        .mockResolvedValueOnce({
-          status,
-          statusText: 'Redirect',
-          headers: { location: '/WebObjects/MZFinance.woa/wa/authenticate?routing=a%2Fb&guid=aabbccddeeff' },
-          rawHeaders: [],
-          body: '',
-        })
-        .mockResolvedValueOnce({
-          status: 200,
-          statusText: 'OK',
-          headers: {},
-          rawHeaders: [],
-          body: buildPlist({
-            accountInfo: { appleId: 'test@example.com', address: { firstName: 'Test', lastName: 'User' } },
-            passwordToken: 'token',
-            dsPersonId: '123',
-          }),
-        });
-
-      await authenticate('test@example.com', 'password', undefined, undefined, 'aabbccddeeff');
-
-      expect(appleRequest).toHaveBeenCalledTimes(2);
-      expect(vi.mocked(appleRequest).mock.calls[1][0]).toMatchObject({
-        host: 'p25-buy.itunes.apple.com',
-        path: '/WebObjects/MZFinance.woa/wa/authenticate/?routing=a%2Fb&guid=aabbccddeeff',
-      });
-    },
-  );
+  it('rejects a nominal success without a usable password token', async () => {
+    vi.mocked(runStore).mockResolvedValue({ ok: true, value: { ...value, passwordToken: '' }, state });
+    await expect(
+      new Authenticator('020000000001').authenticate('test@example.invalid', 'synthetic-password'),
+    ).rejects.toBeInstanceOf(AuthenticationError);
+  });
 });

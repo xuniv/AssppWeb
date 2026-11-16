@@ -461,6 +461,10 @@
       "transientFailure": "Authentication failed: Apple did not respond after {{attempts}} attempts (HTTP {{statuses}}). Please try again later.",
       "edgeRefused": "Authentication failed: all {{attempts}} attempts were refused by Apple's edge before reaching the sign-in service (HTTP {{statuses}}). Apple sheds load on this endpoint at random — please try again later.",
       "retryLater": "Authentication failed: Apple asked to wait {{seconds}} seconds before trying again. Please try again later."
+    },
+    "runtime": {
+      "request": "Apple could not complete the request. Try signing in again.",
+      "busy": "Authentication is already in progress."
     }
   },
   "toast": {
@@ -506,5 +510,9 @@
     "qr": "QR code",
     "delete": "Delete",
     "confirmDelete": "Delete {{name}} and invalidate its install link?"
+  },
+  "runtime": {
+    "preparing": "Preparing Apple authentication. The first run downloads about 80 MB.",
+    "running": "Communicating with Apple…"
   }
 }

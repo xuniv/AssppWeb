@@ -22,3 +22,4 @@ compose*.yml
 .agents
 .codex
 **/*.log
+frontend/public/store-runtime

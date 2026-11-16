@@ -461,6 +461,10 @@
       "transientFailure": "認証に失敗しました：{{attempts}} 回試行しましたが Apple から応答がありません（HTTP {{statuses}}）。しばらくしてから再度お試しください。",
       "edgeRefused": "認証に失敗しました: {{attempts}} 回の試行すべてが、サインインサービスに到達する前に Apple のエッジで拒否されました (HTTP {{statuses}})。Apple はこのエンドポイントをランダムに負荷制限します。しばらくしてから再試行してください。",
       "retryLater": "認証に失敗しました：Apple から {{seconds}} 秒待つよう求められました。しばらくしてから再度お試しください。"
+    },
+    "runtime": {
+      "request": "Apple がリクエストを完了できませんでした。再度ログインしてください。",
+      "busy": "認証はすでに進行中です。"
     }
   },
   "toast": {
@@ -506,5 +510,9 @@
     "qr": "QR コード",
     "delete": "削除",
     "confirmDelete": "{{name}} を削除してインストールリンクを無効にしますか？"
+  },
+  "runtime": {
+    "preparing": "Apple 認証を準備しています。初回は約 80 MB をダウンロードします。",
+    "running": "Apple と通信中…"
   }
 }

@@ -49,6 +49,8 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
   },
 
   removeAccount: async (email: string) => {
+    const { forgetRuntimeAccount } = await import('../apple/storeRuntime');
+    forgetRuntimeAccount(email);
     const db = await getDB();
     await db.delete(STORE_NAME, email);
     set({ accounts: get().accounts.filter((a) => a.email !== email) });
@@ -56,7 +58,19 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
 
   updateAccount: async (account: Account) => {
     const db = await getDB();
-    await db.put(STORE_NAME, account);
+    const { currentRuntimeState } = await import('../apple/storeRuntime');
+    account = {
+      ...account,
+      runtimeState: currentRuntimeState(account.email, account.deviceIdentifier) ?? account.runtimeState,
+    };
+    // A late protocol result must not recreate a deleted credential record.
+    const transaction = db.transaction(STORE_NAME, 'readwrite');
+    if (!(await transaction.store.get(account.email))) {
+      await transaction.done;
+      return;
+    }
+    await transaction.store.put(account);
+    await transaction.done;
     set({
       accounts: get().accounts.map((a) => (a.email === account.email ? account : a)),
     });

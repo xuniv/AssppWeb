@@ -12,6 +12,7 @@ const mockAccount: Account = {
   passwordToken: 'token123',
   directoryServicesIdentifier: 'dsid123',
   cookies: [],
+  deviceIdentifier: '020000000001',
 };
 
 describe('store/accounts', () => {
@@ -76,6 +77,16 @@ describe('store/accounts', () => {
     });
 
     expect(useAccountsStore.getState().accounts).toHaveLength(2);
+  });
+
+  it('does not restore deleted credentials when a protocol update finishes late', async () => {
+    await useAccountsStore.getState().addAccount(mockAccount);
+    await Promise.all([
+      useAccountsStore.getState().removeAccount(mockAccount.email),
+      useAccountsStore.getState().updateAccount({ ...mockAccount, passwordToken: 'late-result' }),
+    ]);
+    await useAccountsStore.getState().loadAccounts();
+    expect(useAccountsStore.getState().accounts).toHaveLength(0);
   });
 
   it('should replace account with same email on add', async () => {

@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
+import StoreRuntimeStatus from '../common/StoreRuntimeStatus';
 import { useSearch } from '../../hooks/useSearch';
 
 interface PageContainerProps {
@@ -32,6 +33,7 @@ export default function PageContainer({ title, children, action }: PageContainer
             {action && <div className="ml-auto max-w-full">{action}</div>}
           </div>
         )}
+        <StoreRuntimeStatus />
         {children}
       </div>
     </div>

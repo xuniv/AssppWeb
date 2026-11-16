@@ -1,3 +1,5 @@
+import type { RuntimeState } from '../apple/storeRuntime';
+
 export interface Software {
   id: number;
   bundleID: string;
@@ -40,6 +42,7 @@ export interface Account {
   directoryServicesIdentifier: string;
   cookies: Cookie[];
   deviceIdentifier: string;
+  runtimeState?: RuntimeState;
   pod?: string;
 }
 

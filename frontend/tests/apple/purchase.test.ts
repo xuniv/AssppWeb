@@ -1,70 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildPlist } from '../../src/apple/plist';
-import { purchaseApp, PurchaseError } from '../../src/apple/purchase';
-import { appleRequest } from '../../src/apple/request';
+import { purchaseApp } from '../../src/apple/purchase';
+import { runStore } from '../../src/apple/storeRuntime';
 import type { Account, Software } from '../../src/types';
-
-vi.mock('../../src/apple/request', () => ({
-  appleRequest: vi.fn(),
+vi.mock('../../src/apple/storeRuntime', async (original) => ({
+  ...(await original<typeof import('../../src/apple/storeRuntime')>()),
+  runStore: vi.fn(),
 }));
-
-const account: Account = {
-  email: 'test@example.com',
-  password: 'password',
-  appleId: 'test@example.com',
-  store: '143441',
-  firstName: 'Test',
-  lastName: 'User',
-  passwordToken: 'token',
-  directoryServicesIdentifier: '123',
-  cookies: [],
-  deviceIdentifier: 'aabbccddeeff',
-  pod: '26',
-};
-
-const app = { id: 1413936031, price: 0 } as Software;
-
-function respondWith(dict: Record<string, unknown>) {
-  vi.mocked(appleRequest).mockResolvedValue({
-    status: 200,
-    statusText: 'OK',
-    headers: {},
-    rawHeaders: [],
-    body: buildPlist(dict),
+const account = { email: 'test@example.invalid', cookies: [], deviceIdentifier: '020000000001' } as unknown as Account;
+const app = { id: 123, price: 0 } as Software;
+const state = { records: {}, cookies: [] };
+describe('modern Store free licensing', () => {
+  beforeEach(() => vi.clearAllMocks());
+  it('rejects paid acquisitions before invoking the runtime', async () => {
+    await expect(purchaseApp(account, { ...app, price: 1 })).rejects.toThrow();
+    expect(runStore).not.toHaveBeenCalled();
   });
-}
-
-describe('apple/purchase', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  it('treats an existing license as success', async () => {
+    vi.mocked(runStore).mockResolvedValue({ ok: false, error: 'license_exists', value: null, state });
+    expect((await purchaseApp(account, app)).alreadyOwned).toBe(true);
   });
-
-  it('treats failureType 5002 as an already-owned license', async () => {
-    respondWith({
-      failureType: '5002',
-      customerMessage: 'An unknown error has occurred',
-    });
-
-    await expect(purchaseApp(account, app)).resolves.toMatchObject({
-      alreadyOwned: true,
-    });
-    expect(appleRequest).toHaveBeenCalledTimes(1);
-  });
-
-  it('reports a fresh purchase as not previously owned', async () => {
-    respondWith({ jingleDocType: 'purchaseSuccess', status: 0 });
-
-    await expect(purchaseApp(account, app)).resolves.toMatchObject({
-      alreadyOwned: false,
-    });
-  });
-
-  it('still rejects other failure types carrying the generic message', async () => {
-    respondWith({
-      failureType: '1008',
-      customerMessage: 'An unknown error has occurred',
-    });
-
-    await expect(purchaseApp(account, app)).rejects.toBeInstanceOf(PurchaseError);
+  it('preserves explicit authentication failures', async () => {
+    vi.mocked(runStore).mockResolvedValue({ ok: false, error: 'token_expired', value: null, state });
+    await expect(purchaseApp(account, app)).rejects.toMatchObject({ code: 'token_expired' });
   });
 });

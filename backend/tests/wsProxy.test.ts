@@ -102,6 +102,8 @@ describe('Wisp Proxy', () => {
       ['uclient-api.itunes.apple.com', 'version listing'],
       ['fpinit.itunes.apple.com', 'SAP setup key exchange'],
       ['s.mzstatic.com', 'SAP setup certificate'],
+      ['gsa.apple.com', 'Anisette and Store AMD provisioning'],
+      ['www.apple.com', 'public Apple root certificate'],
     ])('allows %s (%s)', (host) => {
       expect(allows(host)).toBe(true);
     });
