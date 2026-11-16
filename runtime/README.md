@@ -51,6 +51,10 @@ only bridge calls cross into Go. Guest instruction/time limits remain enforced.
 
 Public images stream into Go through 64 KiB reads, rather than being kept as a
 second complete JS filesystem copy. Native IPC uses the same bounded chunks.
+Each closed image releases temporary Go/JS handles and yields before the next
+image loads, bounding startup buffers as well as emulation memory.
+The reader also collects external staging handles every 4 MiB during large
+images, rather than letting those invisible allocations accumulate until EOF.
 Each loaded guest interns its image pages before the next guest loads.
 Unicorn code/data pages are interned only after exact comparison, protected
 read-only and copied on write outside the active CPU callback. Every unmapped

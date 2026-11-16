@@ -32,14 +32,36 @@ func resolveRemoteImage(context.Context)(Bundle,error){return Bundle{},errors.Ne
 ''')
 path = assets / 'assets.go'
 text = path.read_text()
+needle = '"path/filepath"'
+assert text.count(needle) == 1
+text = text.replace(needle, needle+'\n"runtime"\n"time"')
+needle = 'defer file.Close()'
+assert text.count(needle) == 1
+text = text.replace(needle, '''defer func() {
+    _ = file.Close()
+    // syscall/js read buffers are external allocations. Collect their Go
+    // handles and let JS cancel/deallocate the previous stream before loading
+    // another image, rather than peaking with all seven images' staging RAM.
+    runtime.GC()
+    time.Sleep(time.Millisecond)
+}()''')
 needle = 'var reader io.Reader = file'
 assert text.count(needle) == 1
-text = text.replace(needle, 'var reader io.Reader = boundedReader{file}')
+text = text.replace(needle, 'var reader io.Reader = &boundedReader{Reader:file}')
 text = text.replace('io.TeeReader(file, digest)', 'io.TeeReader(reader, digest)')
 text += '''
 // Bound syscall/js's Uint8Array staging allocation, even for io.ReadFull(image).
-type boundedReader struct { io.Reader }
-func (r boundedReader) Read(p []byte) (int,error) { return r.Reader.Read(p[:min(len(p),64<<10)]) }
+type boundedReader struct { io.Reader; staged int }
+func (r *boundedReader) Read(p []byte) (int,error) {
+    n,err := r.Reader.Read(p[:min(len(p),64<<10)])
+    r.staged += n
+    if r.staged >= 4<<20 {
+        r.staged = 0
+        runtime.GC()
+        time.Sleep(time.Millisecond)
+    }
+    return n,err
+}
 '''
 path.write_text(text)
 path = destination / 'internal/sap/machine/machine.go'
