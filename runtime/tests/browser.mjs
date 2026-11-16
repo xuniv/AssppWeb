@@ -3,11 +3,13 @@ import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { chromium, webkit } from '../../frontend/node_modules/playwright/index.mjs';
 
 const directory = path.resolve(process.argv[2] ?? 'frontend/public/store-runtime');
 const liveApple = process.env.LIVE_APPLE === '1';
+const provisioning = process.env.PROVISION_APPLE === '1';
 let wisp;
 if (liveApple) {
   ({ server: wisp } = await import('../../backend/node_modules/@mercuryworkshop/wisp-js/src/entrypoints/server.mjs'));
@@ -15,6 +17,8 @@ if (liveApple) {
     /^init\.itunes\.apple\.com$/,
     /^s\.mzstatic\.com$/,
     /^fpinit\.itunes\.apple\.com$/,
+    /^gsa\.apple\.com$/,
+    /^www\.apple\.com$/,
   ];
   wisp.options.port_whitelist = [443];
 }
@@ -75,92 +79,126 @@ const address = server.address();
 try {
   for (const name of (process.env.BROWSERS ?? 'chromium').split(',')) {
     const type = name === 'webkit' ? webkit : chromium;
-    const browser = await type.launch({
+    const browserServer = await type.launchServer({
       headless: true,
       ...(name === 'chromium' && process.env.CHROMIUM_PATH
         ? { executablePath: process.env.CHROMIUM_PATH, args: ['--no-sandbox'] }
         : {}),
     });
+    const browser = await type.connect(browserServer.wsEndpoint());
+    let peakContentKiB = 0;
+    const sample = () => {
+      try {
+        const rows = execFileSync('ps', ['-eo', 'pid=,ppid=,rss=,args='], { encoding: 'utf8' })
+          .split('\n')
+          .map((line) => line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/))
+          .filter(Boolean);
+        const descendants = new Set([browserServer.process().pid]);
+        for (let pass = 0; pass < 8; pass++)
+          for (const row of rows) if (descendants.has(Number(row[2]))) descendants.add(Number(row[1]));
+        for (const row of rows)
+          if (descendants.has(Number(row[1])) && /--type=renderer|WebKitWebProcess/.test(row[4]))
+            peakContentKiB = Math.max(peakContentKiB, Number(row[3]));
+      } catch {
+        /* RSS measurement is optional outside Unix CI. */
+      }
+    };
+    const monitor = setInterval(sample, 200);
     try {
       const page = await browser.newPage();
       await page.exposeFunction('reportStage', (stage) => console.log(name + ': ' + stage));
       const errors = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto(`http://127.0.0.1:${address.port}`);
-      const output = await page.evaluate(async (liveApple) => {
-        const worker = new Worker('/store-runtime/store-runtime.js');
-        let id = 1,
-          writes = 0,
-          bytes = 0;
-        const jobs = new Map();
-        worker.onmessage = ({ data }) => {
-          if (data.type === 'fatal') {
-            for (const job of jobs.values()) job.reject(new Error('Runtime initialization failed'));
-          }
-          if (data.type === 'host') {
-            if (data.method === 'writeAsset') {
-              writes++;
-              bytes += data.payload.bytes.byteLength;
+      const output = await page.evaluate(
+        async ({ liveApple, provisioning }) => {
+          const worker = new Worker('/store-runtime/store-runtime.js');
+          let id = 1,
+            writes = 0,
+            bytes = 0;
+          const jobs = new Map();
+          worker.onmessage = ({ data }) => {
+            if (data.type === 'fatal') {
+              for (const job of jobs.values()) job.reject(new Error('Runtime initialization failed'));
             }
-            worker.postMessage({ type: 'reply', id: data.id, value: null });
-          }
-          if (data.type === 'result') {
-            const job = jobs.get(data.id);
-            jobs.delete(data.id);
-            if (data.error) job.reject(new Error(data.error));
-            else job.resolve(JSON.parse(data.value));
-          }
-          if (data.type === 'statistics') {
-            jobs.get('statistics').resolve(data.value);
-            jobs.delete('statistics');
-          }
-        };
-        worker.onerror = () => {
-          for (const job of jobs.values()) job.reject(new Error('Worker failed'));
-        };
-        worker.postMessage({ type: 'initialize', wispURL: `ws://${location.host}/wisp/` });
-        const run = (operation) =>
-          new Promise((resolve, reject) => {
-            const job = id++;
-            jobs.set(job, { resolve, reject });
-            worker.postMessage({
-              type: 'run',
-              id: job,
-              input: JSON.stringify({ operation, deviceID: '020000000001' }),
+            if (data.type === 'host') {
+              if (data.method === 'writeAsset') {
+                writes++;
+                bytes += data.payload.bytes.byteLength;
+              }
+              worker.postMessage({ type: 'reply', id: data.id, value: null });
+            }
+            if (data.type === 'result') {
+              const job = jobs.get(data.id);
+              jobs.delete(data.id);
+              if (data.error) job.reject(new Error(data.error));
+              else job.resolve(JSON.parse(data.value));
+            }
+            if (data.type === 'statistics') {
+              jobs.get('statistics').resolve(data.value);
+              jobs.delete('statistics');
+            }
+          };
+          worker.onerror = () => {
+            for (const job of jobs.values()) job.reject(new Error('Worker failed'));
+          };
+          worker.postMessage({ type: 'initialize', wispURL: `ws://${location.host}/wisp/` });
+          const run = (operation) =>
+            new Promise((resolve, reject) => {
+              const job = id++;
+              jobs.set(job, { resolve, reject });
+              worker.postMessage({
+                type: 'run',
+                id: job,
+                input: JSON.stringify({ operation, deviceID: '020000000001' }),
+              });
             });
-          });
-        try {
-          const results = [];
-          const operations = liveApple
-            ? ['network-preflight', 'sap-test']
-            : ['bridge-preflight', 'preflight', ...Array(5).fill('adi-preflight'), 'framework-preflight'];
-          for (const operation of operations) {
-            await reportStage(operation);
-            results.push({ operation, result: await run(operation) });
-            await reportStage(operation + ' complete');
+          try {
+            const results = [];
+            const operations = liveApple
+              ? ['network-preflight', 'sap-test']
+              : [
+                  'bridge-preflight',
+                  'memory-preflight',
+                  'preflight',
+                  ...Array(3).fill('adi-preflight'),
+                  'framework-preflight',
+                ];
+            if (provisioning) operations.push('anisette-preflight');
+            for (const operation of operations) {
+              await reportStage(operation);
+              const result = await run(operation);
+              results.push({ operation, result });
+              await reportStage(operation + ' complete');
+              if (!result.ok) break;
+            }
+            const statistics = await new Promise((resolve, reject) => {
+              jobs.set('statistics', { resolve, reject });
+              worker.postMessage({ type: 'statistics' });
+            });
+            return { results, statistics, writes, bytes };
+          } finally {
+            worker.terminate();
           }
-          const statistics = await new Promise((resolve, reject) => {
-            jobs.set('statistics', { resolve, reject });
-            worker.postMessage({ type: 'statistics' });
-          });
-          return { results, statistics, writes, bytes };
-        } finally {
-          worker.terminate();
-        }
-      }, liveApple);
+        },
+        { liveApple, provisioning },
+      );
+      console.log(JSON.stringify({ browser: name, peakContentKiB, ...output }));
       for (const item of output.results)
         assert.equal(item.result.ok, true, `${name} ${item.operation}: ${item.result.error}`);
-      assert.equal(output.writes, 7);
-      assert.equal(output.bytes, 78249168);
+      assert.equal(output.writes, 0);
+      assert.equal(output.bytes, 0);
       assert.equal(output.statistics.workspaceBytes, 0);
       assert(
-        output.statistics.goBytes + output.statistics.emulatorBytes < 1024 * 1024 * 1024,
+        output.statistics.goBytes + output.statistics.emulatorBytes < 640 * 1024 * 1024,
         'Interpreter memory exceeded the iOS budget',
       );
+      assert(peakContentKiB > 0 && peakContentKiB < 768 * 1024, 'WebContent peak RSS exceeded the mobile budget');
       assert.deepEqual(errors, []);
-      console.log(JSON.stringify({ browser: name, ...output }));
     } finally {
+      clearInterval(monitor);
       await browser.close();
+      await browserServer.close();
     }
   }
 } finally {

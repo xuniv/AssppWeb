@@ -1,4 +1,3 @@
-import { openDB } from 'idb';
 import { getAccessToken } from '../components/Auth/PasswordGate';
 import { useAccountsStore } from '../store/accounts';
 import { useRuntimeStore } from '../store/runtime';
@@ -43,11 +42,6 @@ const jobs = new Map<
 >();
 const states = new Map<string, RuntimeState>();
 const epochs = new Map<string, number>();
-const assets = openDB('asspp-store-public-assets', 1, {
-  upgrade(db) {
-    db.createObjectStore('images');
-  },
-});
 
 function stop() {
   worker?.terminate();
@@ -61,7 +55,7 @@ function stop() {
 }
 function getWorker(): Worker {
   if (worker) return worker;
-  const value = new Worker('/store-runtime/store-runtime.js');
+  const value = new Worker('/store-runtime/store-runtime.js?memory=stream-v1');
   worker = value;
   value.onerror = stop;
   value.onmessage = async ({ data }) => {
@@ -74,22 +68,9 @@ function getWorker(): Worker {
       return;
     }
     if (data.type === 'host') {
-      try {
-        const db = await assets;
-        if (data.method === 'readAsset') {
-          const bytes: ArrayBuffer | undefined = await db.get('images', data.payload.name);
-          value.postMessage({ type: 'reply', id: data.id, value: bytes ?? null }, bytes ? [bytes] : []);
-        } else if (data.method === 'writeAsset') {
-          await db.put('images', data.payload.bytes, data.payload.name);
-          value.postMessage({ type: 'reply', id: data.id, value: null });
-        } else {
-          value.postMessage({ type: 'reply', id: data.id, error: true });
-        }
-      } catch {
-        // Public-image caching is optional (e.g. private browsing or a full
-        // disk). Account/provisioning persistence uses the separate account DB.
-        value.postMessage({ type: 'reply', id: data.id, value: null });
-      }
+      // A prior cached worker can still finish during an upgrade. Public
+      // images now stream directly from HTTP; never clone them into this page.
+      value.postMessage({ type: 'reply', id: data.id, value: null });
       return;
     }
     if (data.type === 'result') {

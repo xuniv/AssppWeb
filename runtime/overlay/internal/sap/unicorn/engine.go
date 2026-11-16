@@ -32,13 +32,16 @@ const (
 type CodeHook func(uint64, uint32)
 type MemoryFaultHook func(uint64, uint32) bool
 type Engine struct {
-	host     js.Value
-	hooks    []*Hook
-	check    func(uint64, uint64) error
-	ctx      context.Context
-	stopped  bool
-	closed   bool
-	dispatch func() ([]uint64, [][2]uint64)
+	host         js.Value
+	staging      js.Value
+	hooks        []*Hook
+	check        func(uint64, uint64) error
+	ctx          context.Context
+	stopped      bool
+	closed       bool
+	dispatch     func() ([]uint64, [][2]uint64)
+	policyPoints map[uint64]struct{}
+	policyRanges [][2]uint64
 }
 type Hook struct {
 	engine   *Engine
@@ -52,7 +55,7 @@ func New(ctx context.Context) (*Engine, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return &Engine{host: js.Global().Get("assppUnicorn").Call("create"), ctx: ctx}, nil
+	return &Engine{host: js.Global().Get("assppUnicorn").Call("create"), staging: js.Global().Get("Uint8Array").New(65536), ctx: ctx}, nil
 }
 func address(v uint64) string { return strconv.FormatUint(v, 10) }
 func (e *Engine) call(name string, args ...any) (result js.Value, err error) {
@@ -84,18 +87,32 @@ func (e *Engine) MemRead(a, n uint64) ([]byte, error) {
 			return nil, err
 		}
 	}
-	value, err := e.call("read", address(a), int(n))
-	if err != nil {
+	data := make([]byte, n)
+	if err := e.MemReadInto(data, a); err != nil {
 		return nil, err
 	}
-	data := make([]byte, n)
-	js.CopyBytesToGo(data, value)
 	return data, nil
 }
 func (e *Engine) MemReadInto(data []byte, a uint64) error {
-	value, err := e.MemRead(a, uint64(len(data)))
-	copy(data, value)
-	return err
+	if len(data) > 128<<20 {
+		return errors.New("guest read exceeds limit")
+	}
+	if e.check != nil {
+		if err := e.check(a, uint64(len(data))); err != nil {
+			return err
+		}
+	}
+	for len(data) > 0 {
+		count := min(len(data), 65536)
+		value, err := e.call("read", address(a), count)
+		if err != nil {
+			return err
+		}
+		js.CopyBytesToGo(data[:count], value)
+		a += uint64(count)
+		data = data[count:]
+	}
+	return nil
 }
 func (e *Engine) MemWrite(a uint64, data []byte) error {
 	if e.check != nil {
@@ -103,10 +120,20 @@ func (e *Engine) MemWrite(a uint64, data []byte) error {
 			return err
 		}
 	}
-	value := js.Global().Get("Uint8Array").New(len(data))
-	js.CopyBytesToJS(value, data)
-	_, err := e.call("write", address(a), value)
-	return err
+	for len(data) > 0 {
+		count := min(len(data), 64<<10)
+		value := e.staging
+		if count < 65536 {
+			value = value.Call("subarray", 0, count)
+		}
+		js.CopyBytesToJS(value, data[:count])
+		if _, err := e.call("write", address(a), value); err != nil {
+			return err
+		}
+		a += uint64(count)
+		data = data[count:]
+	}
+	return nil
 }
 func (e *Engine) RegRead(r int) (uint64, error) {
 	value, err := e.call("regRead", r)
@@ -160,12 +187,20 @@ func (e *Engine) GuardMemory(fn func(uint64, uint64) error) error {
 // SetDispatchSource avoids crossing the JS/Go boundary for ordinary guest
 // instructions. The JS hook still validates every executed address.
 func (e *Engine) SetDispatchSource(fn func() ([]uint64, [][2]uint64)) { e.dispatch = fn }
+func (e *Engine) SealSharedPages() error                              { _, err := e.call("seal"); return err }
 func (e *Engine) Start(a, b uint64) error                             { return e.StartBounded(a, b, 5*time.Minute, 0) }
 func (e *Engine) StartBounded(a, b uint64, timeout time.Duration, count uint64) error {
 	deadline := time.Now().Add(max(timeout, 5*time.Minute))
 	e.stopped = false
 	var executed uint64
+	lastYield := time.Now()
 	for {
+		// Return to the JS event loop regularly. Go's own Gosched cannot let
+		// WebKit run GC, IPC completions or its responsiveness watchdog.
+		if time.Since(lastYield) >= 32*time.Millisecond {
+			time.Sleep(time.Millisecond)
+			lastYield = time.Now()
+		}
 		if err := e.ctx.Err(); err != nil {
 			return err
 		}
@@ -174,16 +209,40 @@ func (e *Engine) StartBounded(a, b uint64, timeout time.Duration, count uint64) 
 		}
 		if e.dispatch != nil {
 			points, ranges := e.dispatch()
-			p := make([]any, len(points))
-			for i, v := range points {
-				p[i] = address(v)
+			same := len(points) == len(e.policyPoints) && len(ranges) == len(e.policyRanges) && e.policyPoints != nil
+			if same {
+				for _, point := range points {
+					if _, ok := e.policyPoints[point]; !ok {
+						same = false
+						break
+					}
+				}
 			}
-			regions := make([]any, len(ranges))
-			for i, v := range ranges {
-				regions[i] = []any{address(v[0]), address(v[1])}
+			if same {
+				for i, region := range ranges {
+					if region != e.policyRanges[i] {
+						same = false
+						break
+					}
+				}
 			}
-			if _, err := e.call("policy", p, regions); err != nil {
-				return err
+			if !same {
+				e.policyPoints = make(map[uint64]struct{}, len(points))
+				for _, point := range points {
+					e.policyPoints[point] = struct{}{}
+				}
+				e.policyRanges = append(e.policyRanges[:0], ranges...)
+				p := make([]any, len(points))
+				for i, v := range points {
+					p[i] = address(v)
+				}
+				regions := make([]any, len(ranges))
+				for i, v := range ranges {
+					regions[i] = []any{address(v[0]), address(v[1])}
+				}
+				if _, err := e.call("policy", p, regions); err != nil {
+					return err
+				}
 			}
 		}
 		result, err := e.call("start", address(a), address(b), address(count))

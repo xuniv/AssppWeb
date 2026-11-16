@@ -58,6 +58,7 @@ jobs:
         env:
           BROWSERS: chromium
           LIVE_APPLE: '1'
+          PROVISION_APPLE: '1'
         run: node runtime/tests/browser.mjs frontend/public/store-runtime
       - run: npm run format:check
       - run: npm test && npm run build

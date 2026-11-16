@@ -15,6 +15,7 @@ import (
 	"net/http/cookiejar"
 	"net/url"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"github.com/majd/ipatool/v2/internal/sap/machine"
 	"github.com/majd/ipatool/v2/internal/store/emulator"
 	"github.com/majd/ipatool/v2/internal/store/profile"
+	"github.com/majd/ipatool/v2/internal/storeauth"
 	"github.com/majd/ipatool/v2/pkg/appstore"
 	apphttp "github.com/majd/ipatool/v2/pkg/http"
 	"github.com/majd/ipatool/v2/pkg/util/operatingsystem"
@@ -148,10 +150,36 @@ func execute(input string) (result response) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
+	if req.Operation == "memory-preflight" {
+		result.Value, err = memoryPreflight(ctx)
+		result.OK = err == nil
+		if err != nil {
+			result.Error = "memory_isolation_failed"
+		}
+		return result
+	}
+	if req.Operation == "anisette-preflight" {
+		client := storeauth.NewHTTPClient(nil)
+		headers, _, provisioningErr := storeauth.AnisetteHeaders(ctx, client, nil)
+		client.CloseIdleConnections()
+		result.OK = provisioningErr == nil
+		if provisioningErr == nil {
+			result.Value = map[string]bool{"proofReady": headers.Get("X-Apple-I-MD") != "" && headers.Get("X-Apple-I-MD-M") != ""}
+		} else {
+			result.Error = failureCode(provisioningErr)
+			match := regexp.MustCompile(`\bHTTP[ =:]*(\d{3})\b`).FindStringSubmatch(provisioningErr.Error())
+			if len(match) == 2 {
+				result.Status, _ = strconv.Atoi(match[1])
+			}
+		}
+		return result
+	}
 	if req.Operation == "bridge-preflight" {
 		result.Value, err = bridgePreflight(ctx)
 		result.OK = err == nil
-		if err != nil { result.Error = "host_bridge_failed" }
+		if err != nil {
+			result.Error = "host_bridge_failed"
+		}
 		return result
 	}
 	if req.Operation == "network-preflight" {
@@ -323,15 +351,23 @@ func execute(input string) (result response) {
 	return result
 }
 func main() {
-	debug.SetMemoryLimit(256 << 20)
-	debug.SetGCPercent(50)
+	debug.SetMemoryLimit(160 << 20)
+	debug.SetGCPercent(25)
 	zerolog.SetGlobalLevel(zerolog.Disabled)
 	http.DefaultTransport = browsernet.NewTransport()
 	run := js.FuncOf(func(_ js.Value, args []js.Value) any {
 		input := args[0].String()
 		promise := js.FuncOf(func(_ js.Value, callbacks []js.Value) any {
 			resolve := callbacks[0]
-			go func() { output := execute(input); encoded, _ := json.Marshal(output); resolve.Invoke(string(encoded)) }()
+			go func() {
+				output := execute(input)
+				encoded, _ := json.Marshal(output)
+				// Go's heap target cannot see the external JS buffers referenced by
+				// syscall/js values. Release those at each operation boundary too.
+				runtime.GC()
+				time.Sleep(time.Millisecond)
+				resolve.Invoke(string(encoded))
+			}()
 			return nil
 		})
 		result := js.Global().Get("Promise").New(promise)

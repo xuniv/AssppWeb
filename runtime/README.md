@@ -48,3 +48,18 @@ runs the host bridge and resumes the intercepted instruction when appropriate.
 This allows framework callbacks to await network I/O without a blocked JS/WASM
 call stack. Ordinary Store instructions stay in the JS address-policy check;
 only bridge calls cross into Go. Guest instruction/time limits remain enforced.
+
+Public images stream into Go through 64 KiB reads, rather than being kept as a
+second complete JS filesystem copy. Native IPC uses the same bounded chunks.
+Unicorn code/data pages are interned only after exact comparison, protected
+read-only and copied on write outside the active CPU callback. Every unmapped
+page starts at zero. Cached pages are freed when the last guest closes.
+The additional vendor JS export exposes its existing WASM heap view; the
+embedded Unicorn WASM code is unchanged and rebuild-unicorn.sh reproduces it.
+
+Go/JS read and write staging buffers are reused, dispatch policies are updated
+only when their complete address sets change, and emulation periodically yields
+to the JS event loop. Tests enforce both linear-memory and WebContent RSS caps,
+including repeated guests and cross-guest write isolation. The manual public
+network probe also exercises Anisette provisioning without an Apple account;
+its proofs and provisioning records are discarded rather than returned/logged.

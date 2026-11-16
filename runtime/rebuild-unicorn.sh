@@ -24,6 +24,10 @@ cp "$work/dist/unicorn_aarch64.js" "$root/vendor/unicorn-arm64.mjs"
 python3 - "$root/vendor/unicorn-arm64.mjs" <<'PY2'
 import pathlib,sys
 path=pathlib.Path(sys.argv[1]);lines=path.read_text().splitlines(keepends=True)
-assert not lines[1].strip();lines[1]='\n';path.write_text(''.join(lines))
+assert not lines[1].strip();lines[1]='\n'
+text=''.join(lines)
+needle='Module["heapByteLength"]=function(){return HEAPU8.byteLength};'
+assert text.count(needle)==1
+path.write_text(text.replace(needle,needle+'Module["heapBytes"]=function(){return HEAPU8};'))
 PY2
 sha256sum "$root/vendor/unicorn-arm64.mjs"

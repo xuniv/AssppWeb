@@ -1,70 +1,56 @@
 import loadUnicorn from '../vendor/unicorn-arm64.mjs';
+import { sharedMemory } from './memory.mjs';
 
 export async function initializeUnicorn() {
   const uc = await loadUnicorn();
-  const zeros = new Uint8Array(65536);
+  const pool = sharedMemory(uc);
   globalThis.assppUnicorn = {
     memoryBytes: () => uc.heapByteLength(),
+    memoryStatistics: pool.statistics,
     create() {
       const engine = new uc.Unicorn(uc.ARCH_ARM64, uc.MODE_ARM);
       engine.ctl_set_cpu_model(uc.CPU_ARM64_MAX);
       engine.ctl_set_tcg_buffer_size(4 * 1024 * 1024);
+      const memory = pool.create(engine);
       const hooks = new Map();
-      const lazy = [];
-      const lazyBases = new Set(['52776558133248', '70368744177664', '87960930222080']);
-      const mapZeroed = (address, size) => {
-        engine.mem_map(address, size, uc.PROT_ALL);
-        // Unicorn.js replaces anonymous mmap with aligned malloc. Recycled
-        // allocations therefore contain old guest data, unlike native Unicorn.
-        // Explicitly preserve zero-filled RAM/BSS semantics on every mapping.
-        for (let offset = 0; offset < size; offset += zeros.length)
-          engine.mem_write(address + BigInt(offset), zeros.subarray(0, Math.min(zeros.length, size - offset)));
-      };
-      const ensure = (address, size) => {
-        const end = address + BigInt(size),
-          region = lazy.find((r) => address >= r.begin && end <= r.end);
-        if (!region) return false;
-        for (let page = address & ~65535n; page < end; page += 65536n) {
-          if (!region.pages.has(page)) {
-            mapZeroed(page, 65536);
-            region.pages.add(page);
-          }
-        }
-        return true;
-      };
-      const faults = uc.HOOK_MEM_READ_UNMAPPED | uc.HOOK_MEM_WRITE_UNMAPPED | uc.HOOK_MEM_FETCH_UNMAPPED;
+      const broadHooks = new Set();
+      const faults =
+        uc.HOOK_MEM_READ_UNMAPPED | uc.HOOK_MEM_WRITE_UNMAPPED | uc.HOOK_MEM_FETCH_UNMAPPED | uc.HOOK_MEM_WRITE_PROT;
       // Go's guests declare large zero-filled heaps/stacks. Commit their pages on
       // demand so four ADI guests do not eagerly allocate hundreds of unused MiB.
-      const lazyHook = engine.hook_add(faults, (_engine, _kind, at, size) => ensure(at, size));
+      let pendingFault = null;
+      const repairLater = (kind, at, size) => {
+        if (!memory.covers(at, size)) return false;
+        pendingFault = { kind, at, size };
+        engine.emu_stop();
+        return true;
+      };
+      // Replacing a protected mapping inside Unicorn's memory callback leaves
+      // the active load/store with a stale MemoryRegion pointer. Repair only
+      // after uc_emu_start has unwound, then retry the same instruction.
+      const lazyHook = engine.hook_add(faults, (_engine, kind, at, size) => {
+        repairLater(kind, at, size);
+        return false;
+      });
       let events = [],
         skip = null,
         points = null,
         ranges = [],
         steps = 0;
-      const counter = engine.hook_add(uc.HOOK_CODE, () => {
-        steps++;
-      });
+      let counter = null;
       return {
+        seal: memory.seal,
         map(a, n) {
-          if (lazyBases.has(a)) {
-            if (lazy.some((r) => r.begin === BigInt(a))) throw new Error('Guest region already mapped');
-            lazy.push({ begin: BigInt(a), end: BigInt(a) + BigInt(n), pages: new Set() });
-          } else mapZeroed(BigInt(a), Number(n));
+          memory.map(BigInt(a), Number(n));
         },
         unmap(a, n) {
-          const index = lazy.findIndex((r) => r.begin === BigInt(a) && r.end === BigInt(a) + BigInt(n));
-          if (index >= 0) {
-            for (const page of lazy[index].pages) engine.mem_unmap(page, 65536);
-            lazy.splice(index, 1);
-          } else engine.mem_unmap(BigInt(a), Number(n));
+          memory.unmap(BigInt(a), Number(n));
         },
         read(a, n) {
-          ensure(BigInt(a), n);
-          return engine.mem_read(BigInt(a), n);
+          return memory.read(BigInt(a), n);
         },
         write(a, data) {
-          ensure(BigInt(a), data.length);
-          engine.mem_write(BigInt(a), data);
+          memory.write(BigInt(a), data);
         },
         regRead(r) {
           return BigInt.asUintN(64, engine.reg_read_i64(r)).toString();
@@ -79,11 +65,14 @@ export async function initializeUnicorn() {
           engine.reg_write(r, v);
         },
         hook(id, a, b) {
+          const broad = a === '0' && b === '18446744073709551615';
+          if (broad) broadHooks.add(id);
           hooks.set(
             id,
             engine.hook_add(
               uc.HOOK_CODE,
               (_engine, at, size) => {
+                if (broad) steps++;
                 if (
                   a === '0' &&
                   b === '18446744073709551615' &&
@@ -109,8 +98,8 @@ export async function initializeUnicorn() {
         memoryHook(id) {
           hooks.set(
             id,
-            engine.hook_add(faults, (_engine, _kind, at, size) => {
-              if (ensure(at, size)) return true;
+            engine.hook_add(faults, (_engine, kind, at, size) => {
+              if (repairLater(kind, at, size)) return false;
               events.push({ id, address: at.toString(), size });
               engine.emu_stop();
               return false;
@@ -118,6 +107,7 @@ export async function initializeUnicorn() {
           );
         },
         removeHook(id) {
+          broadHooks.delete(id);
           if (hooks.has(id)) {
             engine.hook_del(hooks.get(id));
             hooks.delete(id);
@@ -128,12 +118,25 @@ export async function initializeUnicorn() {
           ranges = regions.map(([a, b]) => [BigInt(a), BigInt(b)]);
         },
         start(a, b, count) {
+          memory.seal();
+          // SAP uses wall-time limits and needs no JS callback per instruction.
+          // The framework already has a broad validation hook: count there.
+          // Keep a separate counter only for bounded synthetic/other engines.
+          if (Number(count) > 0 && !broadHooks.size && !counter)
+            counter = engine.hook_add(uc.HOOK_CODE, () => {
+              steps++;
+            });
+          else if (broadHooks.size && counter) {
+            engine.hook_del(counter);
+            counter = null;
+          }
           // A host callback often redirects PC to its return address. In that
           // case there is no intercepted instruction to replay: carrying its
           // skip token forward would suppress the next genuine call to the same
           // stub. Keep tokens only when resuming that exact instruction.
           if (skip) skip = new Set([...skip].filter((key) => key.endsWith(`:${BigInt(a)}`)));
           events = [];
+          pendingFault = null;
           steps = 0;
           let error = '';
           try {
@@ -141,17 +144,19 @@ export async function initializeUnicorn() {
           } catch (err) {
             error = String(err);
           }
+          if (pendingFault && memory.fault(pendingFault.kind, pendingFault.at, pendingFault.size)) error = '';
           // Replay the intercepted instruction only after the Go bridge has returned.
           // Guest callbacks can then await network I/O without blocking a JS stack.
           skip = new Set(events.map((event) => `${event.id}:${event.address}`));
           return { events, error: events.length ? '' : error, steps };
         },
         close() {
-          engine.hook_del(counter);
+          if (counter) engine.hook_del(counter);
           engine.hook_del(lazyHook);
+          for (const hook of hooks.values()) engine.hook_del(hook);
           engine.close();
+          memory.close();
           hooks.clear();
-          lazy.length = 0;
         },
       };
     },

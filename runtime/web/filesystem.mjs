@@ -81,7 +81,7 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
       return bytes.length;
     }, // Do not expose Go diagnostics or protocol buffers.
     open(p, flags, _mode, cb) {
-      perform(cb, () => {
+      const opened = () => {
         p = normalize(p);
         let f = files.get(p);
         if (f && flags & constants.O_CREAT && flags & constants.O_EXCL) throw failure('EEXIST');
@@ -92,13 +92,15 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
         }
         if (flags & constants.O_TRUNC) resize(f, 0);
         const n = next++;
-        descriptors.set(n, { file: f, position: flags & constants.O_APPEND ? f.size : 0 });
+        descriptors.set(n, { file: f, position: flags & constants.O_APPEND ? f.size : 0, stream: null });
         return n;
-      });
+      };
+      perform(cb, opened);
     },
     close(n, cb) {
       perform(cb, () => {
-        fd(n);
+        const d = fd(n);
+        void d.stream?.close?.().catch(() => {});
         descriptors.delete(n);
       });
     },
@@ -115,6 +117,33 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
       cb(null);
     },
     read(n, buffer, offset, length, position, cb) {
+      let d;
+      try {
+        d = fd(n);
+      } catch (error) {
+        cb(error);
+        return;
+      }
+      if (d.file.remote) {
+        const at = position ?? d.position;
+        const count = Math.max(0, Math.min(length, d.file.size - at, 65536));
+        if (!length) {
+          cb(null, 0);
+          return;
+        }
+        void (async () => {
+          d.stream ??= await d.file.remote();
+          const bytes = await d.stream.read(at, count || 1);
+          if (!(bytes instanceof Uint8Array) || bytes.length > count || (count && !bytes.length)) throw failure('EIO');
+          // A JS await may grow Go's WebAssembly memory and detach this view.
+          // Go's fs adapter supplies an ordinary staging Uint8Array, not a raw
+          // long-lived pointer; copy only the bounded chunk requested here.
+          buffer.set(bytes, offset);
+          if (position === null) d.position += bytes.length;
+          cb(null, bytes.length);
+        })().catch((error) => cb(error));
+        return;
+      }
       perform(cb, () => {
         const d = fd(n),
           at = position ?? d.position;
@@ -214,6 +243,12 @@ export function createFilesystem(limit = 384 * 1024 * 1024) {
         resize(f, data.length);
         f.bytes.set(data);
       }
+    },
+    addRemote(p, size, open) {
+      api.add(p, new Uint8Array(), true);
+      const f = get(p);
+      f.size = size;
+      f.remote = open;
     },
     snapshot() {
       return [...files.entries()]

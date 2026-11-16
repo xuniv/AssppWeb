@@ -30,6 +30,29 @@ for path in assets.iterdir():
 import ("context";"errors")
 func resolveRemoteImage(context.Context)(Bundle,error){return Bundle{},errors.New("verified public Apple assets must be installed before starting the runtime")}
 ''')
+path = assets / 'assets.go'
+text = path.read_text()
+needle = 'var reader io.Reader = file'
+assert text.count(needle) == 1
+text = text.replace(needle, 'var reader io.Reader = boundedReader{file}')
+text = text.replace('io.TeeReader(file, digest)', 'io.TeeReader(reader, digest)')
+text += '''
+// Bound syscall/js's Uint8Array staging allocation, even for io.ReadFull(image).
+type boundedReader struct { io.Reader }
+func (r boundedReader) Read(p []byte) (int,error) { return r.Reader.Read(p[:min(len(p),64<<10)]) }
+'''
+path.write_text(text)
+path = destination / 'internal/sap/machine/machine.go'
+text = path.read_text()
+text = text.replace('"math"', '"math"\n"sort"')
+for mapping in ['functions', 'slots']:
+    needle = 'for address, name := range '+mapping+' {'
+    assert text.count(needle) == 1
+    text = text.replace(needle, '''addresses := make([]uint64, 0, len('''+mapping+'''))
+    for address := range '''+mapping+''' { addresses = append(addresses, address) }
+    sort.Slice(addresses, func(i,j int)bool{return addresses[i]<addresses[j]})
+    for _, address := range addresses { name := '''+mapping+'''[address]''')
+path.write_text(text)
 (destination / 'pkg/keychain/keychain.go').write_text('package keychain\ntype Keychain interface { Get(string)([]byte,error);Set(string,[]byte)error;Remove(string)error }\n')
 path = destination / 'pkg/appstore/appstore_revoke.go'
 text = path.read_text().replace('"github.com/byteness/keyring"', '').replace('errors.Is(cacheErr, keyring.ErrKeyNotFound) || ', '')

@@ -2,6 +2,7 @@ import './wasm_exec.js';
 import { createFilesystem } from './filesystem.mjs';
 import { initializeUnicorn } from './unicorn.mjs';
 import { WispSockets, nativeSockets, fromBase64 } from './sockets.mjs';
+import { compressedAsset, nativeAssets } from './assets.mjs';
 
 const revision = 'b352566155a667d8aaeabaa7ecec4966080f92ab';
 const cache = '/cache/ipatool/sap/apple-assets-macos-27-26A434-arm64-v5/';
@@ -22,16 +23,16 @@ async function initialize(value) {
   globalThis.fs = createFilesystem();
   process.cwd = () => '/';
   process.chdir = () => {};
-  for (const name of names) {
-    const data = await host.readAsset(name);
-    if (data) fs.add(cache + name, data, true);
-  }
+  for (const [index, name] of names.entries())
+    fs.addRemote(cache + name, sizes[index], () => host.openAsset(name, sizes[index]));
   globalThis.assppSocket = host.socket;
+  host.progress?.('preparing', 'engine');
   await initializeUnicorn();
   const go = new Go();
   goInstance = go;
   go.env = { HOME: '/client', XDG_CACHE_HOME: '/cache', TMPDIR: '/tmp' };
-  const wasm = await WebAssembly.instantiate(await host.binary(), go.importObject);
+  host.progress?.('preparing', 'wasm');
+  const wasm = await host.compile(go.importObject);
   failed = new Promise((_, reject) => {
     const stop = () => {
       prepared = false;
@@ -46,16 +47,13 @@ async function invoke(input) {
   await initialization;
   try {
     if (!prepared) {
-      host.progress?.('preparing');
+      host.progress?.('preparing', 'assets');
       const result = JSON.parse(await execute(JSON.stringify({ operation: 'prepare', deviceID: '020000000001' })));
       if (!result.ok) throw new Error('Apple authentication assets could not be prepared');
-      for (const file of fs.snapshot())
-        if (host.writeAsset && file.path.startsWith(cache) && names.includes(file.path.slice(cache.length)))
-          await host.writeAsset(file.path.slice(cache.length), file.bytes);
       fs.clear();
       prepared = true;
     }
-    host.progress?.('running');
+    host.progress?.('running', 'request');
     return await execute(input);
   } finally {
     host.progress?.('');
@@ -93,20 +91,28 @@ const statistics = () => ({
   goBytes: goInstance?._inst?.exports.mem.buffer.byteLength ?? 0,
   emulatorBytes: globalThis.assppUnicorn?.memoryBytes() ?? 0,
   workspaceBytes: globalThis.fs?.allocated ?? 0,
+  sharedMemory: globalThis.assppUnicorn?.memoryStatistics(),
 });
 globalThis.asspp = { run, revision, statistics };
 if (globalThis.webkit?.messageHandlers?.storeRuntime) {
   globalThis.assppHostReply = reply;
   initialization = initialize({
     socket: nativeSockets(rpc),
-    binary: async () => fromBase64(await rpc('runtimeBinary', {})),
-    readAsset: async (name) => {
-      const data = await rpc('readAsset', { name });
-      return data ? fromBase64(data) : null;
+    compile: async (imports) => {
+      const { size } = await rpc('binarySize', {});
+      if (!Number.isSafeInteger(size) || size <= 0 || size > 40 * 1024 * 1024) throw new Error('Invalid runtime size');
+      const bytes = new Uint8Array(size);
+      for (let offset = 0; offset < size; offset += 65536) {
+        const chunk = fromBase64(await rpc('binaryRead', { offset, count: Math.min(65536, size - offset) }));
+        if (chunk.length !== Math.min(65536, size - offset)) throw new Error('Incomplete runtime chunk');
+        bytes.set(chunk, offset);
+      }
+      return await WebAssembly.instantiate(bytes, imports);
     },
+    openAsset: nativeAssets(rpc),
     // Native readAsset already checks and caches the packaged public images.
     // Sending them back through JSON would duplicate all 78 MiB unnecessarily.
-    progress: (stage) => void rpc('progress', { stage }),
+    progress: (stage, phase) => void rpc('progress', { stage, phase: phase ?? '' }),
   });
   initialization.then(
     () => rpc('ready', {}),
@@ -121,34 +127,8 @@ if (globalThis.webkit?.messageHandlers?.storeRuntime) {
     if (data.type === 'initialize') {
       initialization = initialize({
         socket: new WispSockets(data.wispURL),
-        binary: async () => await (await fetch(new URL('runtime.wasm', location.href))).arrayBuffer(),
-        readAsset: async (name) => {
-          const expected = sizes[names.indexOf(name)];
-          if (!expected) throw new Error('Unknown public asset');
-          const bytes = await rpc('readAsset', { name });
-          if (bytes && bytes.byteLength === expected) return new Uint8Array(bytes);
-          const response = await fetch(new URL(`assets/${name}.zlib`, location.href));
-          if (!response.ok || !response.body) throw new Error('Public Apple asset unavailable');
-          const reader = response.body.pipeThrough(new DecompressionStream('deflate')).getReader();
-          const output = new Uint8Array(expected);
-          let offset = 0;
-          for (;;) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            if (value.length > expected - offset) {
-              await reader.cancel();
-              throw new Error('Public asset exceeds pinned size');
-            }
-            output.set(value, offset);
-            offset += value.length;
-          }
-          if (offset !== expected) throw new Error('Public asset has incorrect size');
-          return output;
-        },
-        writeAsset: (name, bytes) => {
-          const copy = bytes.slice().buffer;
-          return rpc('writeAsset', { name, bytes: copy }, [copy]);
-        },
+        compile: (imports) => WebAssembly.instantiateStreaming(fetch(new URL('runtime.wasm', location.href)), imports),
+        openAsset: compressedAsset,
         progress: (stage) => postMessage({ type: 'progress', stage }),
       });
       initialization.then(
