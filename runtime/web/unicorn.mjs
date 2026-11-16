@@ -135,6 +135,7 @@ export async function initializeUnicorn() {
           // skip token forward would suppress the next genuine call to the same
           // stub. Keep tokens only when resuming that exact instruction.
           if (skip) skip = new Set([...skip].filter((key) => key.endsWith(`:${BigInt(a)}`)));
+          const replay = skip ? [...skip] : [];
           events = [];
           pendingFault = null;
           steps = 0;
@@ -147,7 +148,9 @@ export async function initializeUnicorn() {
           if (pendingFault && memory.fault(pendingFault.kind, pendingFault.at, pendingFault.size)) error = '';
           // Replay the intercepted instruction only after the Go bridge has returned.
           // Guest callbacks can then await network I/O without blocking a JS stack.
-          skip = new Set(events.map((event) => `${event.id}:${event.address}`));
+          // A protected-page fault retries the same uncompleted instruction.
+          // Keep its already-delivered callbacks suppressed across that retry.
+          skip = new Set([...(pendingFault ? replay : []), ...events.map((event) => `${event.id}:${event.address}`)]);
           return { events, error: events.length ? '' : error, steps };
         },
         close() {

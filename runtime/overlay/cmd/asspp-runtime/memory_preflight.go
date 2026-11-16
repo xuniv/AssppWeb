@@ -55,8 +55,15 @@ func memoryPreflight(ctx context.Context) (any, error) {
 			return nil, err
 		}
 	}
+	callbacks := 0
+	if _, err = b.AddCodeHook(0x1000, 0x1000, func(uint64, uint32) { callbacks++ }); err != nil {
+		return nil, err
+	}
 	if err = b.StartBounded(0x1000, 0x3000, time.Minute, 100); err != nil {
 		return nil, err
+	}
+	if callbacks != 1 {
+		return nil, errors.New("copy-on-write retry delivered a callback twice")
 	}
 	left, err := a.MemRead(0x2000, 1)
 	if err != nil {
