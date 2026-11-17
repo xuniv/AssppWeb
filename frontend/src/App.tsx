@@ -21,6 +21,7 @@ const UploadPage = lazy(() => import('./components/Upload/UploadPage'));
 const AddDownload = lazy(() => import('./components/Download/AddDownload'));
 const PackageDetail = lazy(() => import('./components/Download/PackageDetail'));
 const SettingsPage = lazy(() => import('./components/Settings/SettingsPage'));
+const UnfairPlayPage = lazy(() => import('./components/UnfairPlay/UnfairPlayPage'));
 
 function Loading() {
   const { t } = useTranslation();
@@ -81,6 +82,7 @@ export default function App() {
               <Route path="/search/:appId/versions" element={<VersionHistory />} />
               <Route path="/downloads" element={<DownloadList />} />
               <Route path="/uploads" element={<UploadPage />} />
+              <Route path="/unfairplay" element={<UnfairPlayPage />} />
               <Route path="/downloads/add" element={<AddDownload />} />
               <Route path="/downloads/:id" element={<PackageDetail />} />
               <Route path="/settings" element={<SettingsPage />} />

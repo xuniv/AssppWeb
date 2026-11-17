@@ -11,3 +11,4 @@ CLAUDE.md
 runtime/vendor/
 runtime/web/wasm_exec.js
 runtime/licenses/
+runtime/unfairplay/licenses/

@@ -23,3 +23,18 @@ compose*.yml
 .codex
 **/*.log
 frontend/public/store-runtime
+
+# Never send private models, enrollments, IPAs or decrypted artifacts to builders.
+**/*.bin
+**/*.snapshot
+**/*.capture
+**/*.recovery
+**/*.sinf
+**/*.supf
+**/*.supp
+**/*.sidb
+**/*.sids
+**/*.decrypted.*
+**/*.ipa
+**/*.tipa
+frontend/public/unfairplay

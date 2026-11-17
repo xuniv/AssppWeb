@@ -6,6 +6,7 @@ import AppIcon from '../common/AppIcon';
 import Badge from '../common/Badge';
 import Modal from '../common/Modal';
 import ProgressBar from '../common/ProgressBar';
+import UnfairPlayPanel from '../UnfairPlay/UnfairPlayPanel';
 import PackageQuickActions from './PackageQuickActions';
 import { isDownloadPreviewEnabled, isPreviewDownloadTask, previewDownloadTasks } from './previewTasks';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -35,6 +36,7 @@ export default function PackageDetail() {
   const [latestApp, setLatestApp] = useState<Software | null>(null);
   const [availableVersions, setAvailableVersions] = useState<string[]>([]);
   const [selectedVersion, setSelectedVersion] = useState('');
+  const [showUnfairPlay, setShowUnfairPlay] = useState(false);
 
   const previewEnabled = isDownloadPreviewEnabled(location.search);
   const taskPool = previewEnabled ? previewDownloadTasks : tasks;
@@ -239,6 +241,16 @@ export default function PackageDetail() {
           {isCompleted && task.hasFile && (
             <div className="mt-4">
               <PackageQuickActions task={task} />
+              {!isPreview && (
+                <button
+                  type="button"
+                  className="mt-3 min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm transition-colors hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800"
+                  aria-expanded={showUnfairPlay}
+                  onClick={() => setShowUnfairPlay(!showUnfairPlay)}
+                >
+                  UnfairPlay
+                </button>
+              )}
             </div>
           )}
 
@@ -286,6 +298,15 @@ export default function PackageDetail() {
             </button>
           </div>
         </section>
+        {showUnfairPlay && isCompleted && task.hasFile && !isPreview && (
+          <UnfairPlayPanel
+            source={{
+              name: `${task.software.name}_${task.software.version}.ipa`,
+              serverSource: { kind: 'package', id: task.id, accountHash: task.accountHash },
+              url: `/api/packages/${encodeURIComponent(task.id)}/file?${new URLSearchParams({ accountHash: task.accountHash })}`,
+            }}
+          />
+        )}
       </div>
 
       <Modal

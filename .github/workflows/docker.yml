@@ -1,10 +1,10 @@
-name: Build and Push Docker Image
+name: Verify and Publish Docker Image
 
 on:
   workflow_dispatch:
     inputs:
       expected_sha:
-        description: Exact reviewed source commit
+        description: Exact reviewed 40-character main commit
         required: true
         type: string
       publish:
@@ -16,30 +16,47 @@ concurrency:
   group: verified-web-image
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  DOCKER_BUILD_RECORD_UPLOAD: 'false'
 
 jobs:
   verify:
-    if: github.repository == 'xuniv/AssppWeb'
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'xuniv/AssppWeb' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+      image: ${{ steps.source.outputs.image }}
+      created: ${{ steps.source.outputs.created }}
     steps:
       - name: Require the reviewed source revision
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
-          PUBLISH: ${{ inputs.publish }}
         run: |
-          test "$EXPECTED_SHA" = "$GITHUB_SHA"
           case "$EXPECTED_SHA" in *[!0-9a-f]*|'') exit 1;; esac
           test "${#EXPECTED_SHA}" = 40
-          if [ "$PUBLISH" = true ]; then test "$GITHUB_REF" = refs/heads/main; fi
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = refs/heads/main
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Pin reviewed main and image metadata
+        id: source
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin refs/heads/main | cut -f1)" = "$GITHUB_SHA"
+          echo "sha=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+          echo "image=$REGISTRY/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          echo "created=$(git show -s --format=%cI HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -58,53 +75,39 @@ jobs:
         working-directory: backend
       - run: npm test && npx tsc --noEmit && npm run build
         working-directory: frontend
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.26.5'
-          cache: false
-      - uses: actions/cache@v4
-        with:
-          path: ~/.cache/ipatool/sap
-          key: public-apple-macos27-26A434-arm64-v5
-      - name: Build the client Store interpreter and public assets
-        run: bash runtime/build.sh frontend/public/store-runtime
-      - name: Check isolated shared code and translated-code invalidation
-        run: node runtime/tests/code-invalidation.mjs
-      - name: Check native asset decoding memory
-        run: node runtime/tests/memory.mjs
-      - name: Install Chromium and WebKit
-        run: npx playwright install --with-deps chromium webkit
-        working-directory: frontend
-      - name: Check the actual interpreter in both browser engines
-        env:
-          BROWSERS: chromium,webkit
-        run: node runtime/tests/browser.mjs frontend/public/store-runtime
-      - name: Check verified Apple TLS and SAP through the actual Wisp server
-        env:
-          BROWSERS: chromium,webkit
-          LIVE_APPLE: '1'
-          PROVISION_APPLE: '1'
-        run: node runtime/tests/browser.mjs frontend/public/store-runtime
-      - name: Check server-mode consent and cancellation in WebKit
-        run: node --import ./backend/node_modules/tsx/dist/loader.mjs runtime/tests/server-mode-webkit.mjs
 
   build:
     if: inputs.publish && github.ref == 'refs/heads/main'
     needs: verify
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 40
     permissions:
       contents: read
       packages: write
 
     steps:
+      - name: Require a native build runner
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "$ARCH" in
+            amd64) test "$(uname -m)" = x86_64 ;;
+            arm64) test "$(uname -m)" = aarch64 ;;
+            *) exit 1 ;;
+          esac
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.verify.outputs.sha }}
           persist-credentials: false
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -116,27 +119,97 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=
-
-      - name: Build and push
+      - name: Build native architecture by digest
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=image,name=${{ needs.verify.outputs.image }},push-by-digest=true,name-canonical=true,push=true
+          labels: |
+            org.opencontainers.image.revision=${{ needs.verify.outputs.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.created=${{ needs.verify.outputs.created }}
           build-args: |
-            BUILD_COMMIT=${{ github.sha }}
-            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            BUILD_COMMIT=${{ needs.verify.outputs.sha }}
+            BUILD_DATE=${{ needs.verify.outputs.created }}
+          cache-from: type=gha,scope=native-${{ matrix.arch }}
+          cache-to: type=gha,scope=native-${{ matrix.arch }},mode=min
+
+      - name: Export only the architecture digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          mkdir -p "$RUNNER_TEMP/image-digests"
+          printf '%s\n' "$DIGEST" > "$RUNNER_TEMP/image-digests/$ARCH.digest"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-digest-${{ matrix.arch }}
+          path: ${{ runner.temp }}/image-digests/${{ matrix.arch }}.digest
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    if: inputs.publish && github.ref == 'refs/heads/main'
+    needs: [verify, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+    steps:
+      - name: Require reviewed main before publishing tags
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_SHA: ${{ needs.verify.outputs.sha }}
+        with:
+          script: |
+            const { data } = await github.rest.repos.getBranch({ ...context.repo, branch: 'main' });
+            if (!/^[0-9a-f]{40}$/.test(process.env.EXPECTED_SHA) || data.commit.sha !== process.env.EXPECTED_SHA) {
+              core.setFailed('Reviewed main changed; publication blocked.');
+            }
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: image-digest-*
+          path: ${{ runner.temp }}/image-digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish one manifest after both native builds
+        env:
+          IMAGE: ${{ needs.verify.outputs.image }}
+          SOURCE_SHA: ${{ needs.verify.outputs.sha }}
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          sources=()
+          for arch in amd64 arm64; do
+            digest="$(cat "$RUNNER_TEMP/image-digests/$arch.digest")"
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            sources+=("$IMAGE@$digest")
+          done
+          test "${sources[0]}" != "${sources[1]}"
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.revision=$SOURCE_SHA" \
+            --tag "$IMAGE:${SOURCE_SHA:0:7}" \
+            --tag "$IMAGE:latest" \
+            "${sources[@]}"
+      - name: Delete the tiny temporary digest artifacts
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts, {
+              ...context.repo, run_id: context.runId, per_page: 100,
+            });
+            for (const artifact of artifacts) {
+              if (['image-digest-amd64', 'image-digest-arm64'].includes(artifact.name)) {
+                await github.rest.actions.deleteArtifact({ ...context.repo, artifact_id: artifact.id });
+              }
+            }

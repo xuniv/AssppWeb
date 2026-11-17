@@ -18,7 +18,15 @@ if [[ -z "$source_path" ]]; then
  git -C "$source_path" fetch -q --depth 1 https://github.com/majd/ipatool.git "$revision"
  git -C "$source_path" checkout -q --detach FETCH_HEAD
 fi
+unfair_source="${UNFAIRPLAY_SOURCE:-}"
+if [[ -z "$unfair_source" ]]; then
+ unfair_source="$work/unfairplay-source"
+ git init -q "$unfair_source"
+ git -C "$unfair_source" fetch -q --depth 1 https://github.com/DrWhax/unfairplay.git d7503082a59e3dcfdd3ea7a70434dcecaaaf07df
+ git -C "$unfair_source" checkout -q --detach FETCH_HEAD
+fi
 python3 "$root/prepare.py" "$source_path" "$work/sdk"
+python3 "$root/../unfairplay/prepare.py" "$unfair_source" "$work/sdk" --combined
 python3 - "$root" <<'PY'
 import hashlib,pathlib,sys
 p=pathlib.Path(sys.argv[1])/'overlay/internal/browsernet/roots.crt'
@@ -94,6 +102,11 @@ mkdir -p "$output/licenses"
 cp -R "$root/../licenses/." "$output/licenses/"
 cp "$root/overlay/internal/sap/kbsync/LICENSE" "$output/licenses/apple-auth-MIT.txt"
 cp "$root/overlay/internal/sap/kbsync/NOTICE" "$output/licenses/KBSync-NOTICE.txt"
+cp "$root/../unfairplay/licenses/Howett-plist-BSD.txt" "$output/licenses/Howett-plist-BSD.txt"
+for name in LICENSE NOTICE LICENSE-DARKPHOENIX.txt LICENSE-MACOSFAIRFREE.txt; do
+ cp "$unfair_source/$name" "$output/licenses/UnfairPlay-$name"
+done
+printf '%s\n' d7503082a59e3dcfdd3ea7a70434dcecaaaf07df > "$output/unfairplay-revision.txt"
 printf '%s\n' "$revision" > "$output/upstream-revision.txt"
 # Reuse the existing public-asset build step; callers can reuse a previously prepared bundle.
 if [[ "${ASSPP_NATIVE_SKIP_ASSETS:-0}" == 1 ]]; then
@@ -103,4 +116,9 @@ elif [[ -n "${ASSPP_PUBLIC_ASSETS:-}" ]]; then
  cp -R "$ASSPP_PUBLIC_ASSETS/." "$output/assets/"
 elif [[ "${ASSPP_NATIVE_SKIP_ASSETS:-0}" != 1 ]]; then
  (cd "$work/sdk" && env -u GOOS -u GOARCH CGO_ENABLED=0 go run -mod=readonly ./cmd/asspp-assets "$output/assets")
+fi
+
+# Opt-in synthetic iOS acceptance inputs stay outside production resources.
+if [[ "${ASSPP_UNFAIRPLAY_FIXTURES:-0}" == 1 && "$target" == ios-arm64 ]]; then
+ (cd "$work/sdk" && env -u GOOS -u GOARCH CGO_ENABLED=0 ASSPP_UNFAIRPLAY_FIXTURE_OUTPUT="$output/test-fixtures" go test -tags asspp_unfair_fixture -mod=readonly ./internal/unfairplay -run '^TestWritePortableBuildFixtures$' -count=1)
 fi

@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { timingSafeEqual } from 'crypto';
 import path from 'path';
+import os from 'os';
 
 export const config = {
   port: parseInt(process.env.PORT || '8080'),
@@ -24,7 +25,17 @@ export const config = {
     path.resolve(import.meta.dirname, '../server-runtime/asspp-runtime-native'),
   serverStoreRuntimeAssets:
     process.env.SERVER_STORE_RUNTIME_ASSETS || path.resolve(import.meta.dirname, '../server-runtime/assets'),
+  serverUnfairplayEnabled: process.env.SERVER_UNFAIRPLAY_ENABLED !== 'false',
+  serverUnfairplayPath:
+    process.env.SERVER_UNFAIRPLAY_PATH || path.resolve(import.meta.dirname, '../server-runtime/asspp-unfairplay'),
+  unfairplayTempDir: process.env.UNFAIRPLAY_TEMP_DIR || path.join(os.tmpdir(), 'asspp-unfairplay'),
 };
+
+export const UNFAIRPLAY_MAX_IPA_BYTES = 2 * 1024 * 1024 * 1024;
+export const UNFAIRPLAY_MAX_OUTPUT_BYTES = 4 * 1024 * 1024 * 1024;
+export const UNFAIRPLAY_MAX_MODELS = 256;
+export const UNFAIRPLAY_MODEL_SIZES = [4176, 4184, 8708] as const;
+export const UNFAIRPLAY_TIMEOUT_MS = 10 * 60 * 1000;
 
 export const SERVER_RUNTIME_MAX_BYTES = 8 * 1024 * 1024;
 export const SERVER_RUNTIME_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;

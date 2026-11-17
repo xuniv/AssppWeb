@@ -132,6 +132,15 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - SINF injector also handles optional `iTunesMetadata.plist` injection at IPA root
 - Bag proxy for `init.itunes.apple.com`
 
+### Portable UnfairPlay
+
+- Read `runtime/unfairplay/README.md` before changing crypto adapters. Preserve upstream enrollment matching, authenticated SINF checks and signed-table/hash validation; never try unrelated models as a fallback.
+- Keep UnfairPlay in the existing native Store Go archive, sharing its operation gate. Linux uses the separate stateless `asspp-unfairplay --stdio` executable. Do not link two Go runtimes into Asspp.
+- Models belong in private browser IndexedDB or native Keychain. Import validation is separate from selected registry compatibility. Browser processing uses a worker and bounded OPFS IO, with capability checks before private input transfer.
+- Server UnfairPlay requires its own explicit toggle and selected models, independently of Apple authentication mode. Only typed existing package/upload sources or streamed IPA uploads are accepted. Models stay in memory; request-scoped IPA/output files are private and cleaned on every exit and startup. Never retain models, upstream reports, selectors, hashes or raw child logs.
+- Preserve input files, create new exports exclusively, cancel disconnected work, and expose only safe counts, coverage flags and model versions. Incomplete plaintext coverage is not verification of Apple signature trust. Decryption needs subsequent signing; known account-data stripping is not a complete anonymization promise.
+- Never commit private enrollment files or IPAs. Generated synthetic smoke fixtures belong outside production bundles. Remote CI remains manual, exact-SHA guarded and limited to release work; run broad verification locally.
+
 ### Backend Shared Utilities
 
 - `backend/src/utils/route.ts` — shared Express route helpers (`getIdParam`, `requireAccountHash`, `verifyTaskOwnership`)

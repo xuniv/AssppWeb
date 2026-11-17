@@ -143,3 +143,16 @@ deploy.sh
 
 # Client Store runtime build outputs.
 frontend/public/store-runtime/
+
+# Private UnfairPlay enrollment material and generated analysis artifacts.
+*.bin
+*.snapshot
+*.capture
+*.recovery
+*.sinf
+*.supf
+*.supp
+*.sidb
+*.sids
+*.decrypted.*
+frontend/public/unfairplay/

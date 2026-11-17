@@ -10,6 +10,12 @@ int asspp_runtime_configure(const char *asset_directory);
 // The returned allocation belongs to the caller and must be freed with the function below.
 char *asspp_runtime_call(const char *request_json);
 void asspp_runtime_free(char *response_json);
+// Offline UnfairPlay operations share this same Go runtime and operation gate.
+// JSON requests are bounded to 4 MiB and contain ephemeral base64 model bytes.
+char *asspp_unfairplay_call(const char *request_json);
+void asspp_unfairplay_free(char *response_json);
+// Cancels only the operation carrying this UUID; safe while another call blocks.
+void asspp_unfairplay_cancel(const char *request_id);
 #ifdef __cplusplus
 }
 #endif

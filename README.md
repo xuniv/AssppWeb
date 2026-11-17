@@ -80,6 +80,18 @@ Open **IPA uploads** next to Downloads, choose an `.ipa` from ipatool or another
 - `MAX_DOWNLOAD_MB` also limits each upload, with an absolute 8 GiB ceiling. An upload cannot exceed a configured upload storage cap. If a reverse proxy is used, allow the intended request body size and upload duration there as well (for nginx, `client_max_body_size` and `proxy_read_timeout`).
 - With `ACCESS_PASSWORD` enabled, listing, uploading, and deleting require the same access token as other APIs. As with upstream installs, the random install URL grants public access to its manifest and payload so iOS can fetch them. Share it only with intended recipients.
 
+### UnfairPlay
+
+Open **UnfairPlay** from an uploaded or downloaded IPA, or open `/unfairplay` to process a local file. Import exported UnfairPlay `.bin` models and explicitly select the models for the IPA's enrollment. Models are kept in a separate browser IndexedDB database and can be exported or deleted there. They are never included in published images.
+
+Device processing runs the pinned portable Go engine in a dedicated WebAssembly worker. IPA data is streamed through private OPFS storage with bounded buffers instead of copying an entire executable into WASM memory. A secure context with OPFS and synchronous worker file access is required. Unsupported browsers stop before transferring private input. Physical iPhone Safari memory limits still require device testing.
+
+The independent **Process on this server** switch explicitly permits sending the selected models and IPA to this server for one operation. It never switches on automatically. Existing server IPAs are referenced directly without downloading and uploading them again. Models stay in process memory; temporary IPA files and outputs are private and removed after response, cancellation, failure or restart. Server processing defaults to one active operation, a ten-minute deadline and a 2 GiB input limit. Reverse proxies must allow the intended body size and duration. `SERVER_UNFAIRPLAY_ENABLED=false` disables this mode.
+
+Supported operations are model inspection, IPA diagnostics, verification, decryption, decryption with account-data stripping, stripping alone, and macOS SINF conversion with v2 models. Mac setup, enrollment collection/recovery and application signing are excluded. Processing creates a new export and leaves the original IPA unchanged. Decrypted IPAs need signing before installation. Account stripping removes known license and purchaser metadata; it does not guarantee complete anonymization. A successful operation with incomplete plaintext hash coverage is reported as such, separately from Apple code-signature trust.
+
+See [the portable engine](runtime/unfairplay/README.md) and [browser verification](runtime/tests/unfairplay-ui.md) for source pins, limits and reproducible checks.
+
 ### Self-Host with Docker Compose
 
 <details>

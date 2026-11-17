@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
+import { Link } from 'react-router-dom';
 import PageContainer from '../Layout/PageContainer';
 import Alert from '../common/Alert';
 import Spinner from '../common/Spinner';
+import UnfairPlayPanel from '../UnfairPlay/UnfairPlayPanel';
 import { deleteUpload, listUploads, uploadIpa } from '../../api/uploads';
 import { getErrorMessage } from '../../utils/error';
 import { formatBytes } from '../../utils/format';
@@ -23,6 +25,7 @@ export default function UploadPage() {
   const [notice, setNotice] = useState('');
   const [deleting, setDeleting] = useState<string | null>(null);
   const [qrId, setQrId] = useState<string | null>(null);
+  const [toolId, setToolId] = useState<string | null>(null);
   const controller = useRef<AbortController | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -100,6 +103,9 @@ export default function UploadPage() {
     <PageContainer title={t('uploads.title')}>
       <div className="space-y-6">
         <p className="text-sm text-gray-600 dark:text-gray-400">{t('uploads.description')}</p>
+        <Link to="/unfairplay" className="inline-flex min-h-11 items-center text-sm text-blue-600 underline">
+          {t('unfairplay.open')}
+        </Link>
         <Alert type="warning">{t('uploads.retention')}</Alert>
         {error && <Alert type="error">{error}</Alert>}
         {notice && <Alert type="success">{notice}</Alert>}
@@ -195,6 +201,14 @@ export default function UploadPage() {
                   </button>
                   <button
                     type="button"
+                    aria-expanded={toolId === item.id}
+                    onClick={() => setToolId(toolId === item.id ? null : item.id)}
+                    className={secondaryButton}
+                  >
+                    UnfairPlay
+                  </button>
+                  <button
+                    type="button"
                     disabled={deleting === item.id}
                     onClick={() => remove(item)}
                     className={`${secondaryButton} text-red-600 dark:text-red-400`}
@@ -202,6 +216,15 @@ export default function UploadPage() {
                     {t('uploads.delete')}
                   </button>
                 </div>
+                {toolId === item.id && (
+                  <UnfairPlayPanel
+                    source={{
+                      name: `${item.software.name}_${item.software.version}.ipa`,
+                      serverSource: { kind: 'upload', id: item.id },
+                      url: `/api/install/uploads/${encodeURIComponent(item.id)}/payload.ipa`,
+                    }}
+                  />
+                )}
                 {qrId === item.id && (
                   <div className="inline-block rounded-lg bg-white p-3">
                     <QRCodeSVG value={item.installUrl} size={180} title={t('uploads.qr')} />

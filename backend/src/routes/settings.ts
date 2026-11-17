@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { config, DOWNLOAD_THREADS } from '../config.js';
 import { serverStoreRuntime } from '../services/serverStoreRuntime.js';
+import { serverUnfairplay } from '../services/unfairplay.js';
 
 const router = Router();
 const startedAt = Date.now();
@@ -19,6 +20,7 @@ router.get('/settings', (_req: Request, res: Response) => {
     maxDownloadMB: config.maxDownloadMB,
     downloadThreads: DOWNLOAD_THREADS,
     serverStoreRuntimeAvailable: serverStoreRuntime.available(),
+    serverUnfairplayAvailable: serverUnfairplay.available(),
   });
 });
 

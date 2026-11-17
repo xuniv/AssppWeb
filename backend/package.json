@@ -14,23 +14,25 @@
     "@mercuryworkshop/wisp-js": "^0.4.1",
     "bplist-creator": "^0.1.1",
     "bplist-parser": "^0.3.2",
+    "busboy": "^1.6.0",
     "express": "^4.21.2",
     "plist": "^3.1.0",
     "yauzl-promise": "^4.0.0"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
+    "@types/busboy": "^1.5.4",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "@types/plist": "^3.0.5",
     "@types/supertest": "^6.0.3",
     "@types/ws": "^8.18.1",
     "@types/yauzl-promise": "^4.0.1",
+    "adm-zip": "^0.6.1",
     "supertest": "^7.2.2",
     "tsx": "^4.23.15",
     "typescript": "^5.7.3",
-    "vitest": "^4.0.18",
-    "adm-zip": "^0.6.1"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=24"

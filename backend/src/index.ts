@@ -16,6 +16,7 @@ import settingsRoutes from './routes/settings.js';
 import bagRoutes from './routes/bag.js';
 import uploadRoutes from './routes/uploads.js';
 import storeRuntimeRoutes from './routes/storeRuntime.js';
+import unfairplayRoutes from './routes/unfairplay.js';
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use(httpsRedirect);
 app.use('/api', accessAuth);
 // Private runtime requests have their own small parser and fixed parse errors.
 app.use('/api', storeRuntimeRoutes);
+app.use('/api', unfairplayRoutes);
 app.use(express.json({ limit: '50mb' }));
 
 // API routes

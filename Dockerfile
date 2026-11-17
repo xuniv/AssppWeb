@@ -10,16 +10,31 @@ RUN npm ci --no-audit --no-fund \
 FROM --platform=$BUILDPLATFORM golang:1.26.5-alpine AS client-runtime
 RUN apk add --no-cache bash git python3
 WORKDIR /app
+# Both portable targets and the combined Store engine use this one pinned checkout.
+RUN git init -q /unfairplay-source \
+    && git -C /unfairplay-source fetch -q --depth 1 https://github.com/DrWhax/unfairplay.git d7503082a59e3dcfdd3ea7a70434dcecaaaf07df \
+    && git -C /unfairplay-source checkout -q --detach FETCH_HEAD
 COPY runtime/ ./runtime/
 COPY --from=frontend-deps /tmp/esbuild /usr/local/bin/esbuild
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/root/.cache/ipatool \
-    ESBUILD=/usr/local/bin/esbuild bash runtime/build.sh /out
+    ESBUILD=/usr/local/bin/esbuild bash runtime/build.sh /out \
+    && UNFAIRPLAY_SOURCE=/unfairplay-source ESBUILD=/usr/local/bin/esbuild \
+       bash runtime/unfairplay/build-browser.sh /out-unfairplay
+
+# Inherit the build-platform tools and checkout; pure Go cross-compiles the CLI
+# without a target-architecture compiler or emulation.
+FROM client-runtime AS unfairplay-server-runtime
+ARG TARGETARCH
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    UNFAIRPLAY_SOURCE=/unfairplay-source bash runtime/unfairplay/build.sh /out-unfairplay-server linux-${TARGETARCH}
 
 FROM frontend-deps AS frontend-build
 COPY frontend/ ./
 COPY --from=client-runtime /out ./public/store-runtime
+COPY --from=client-runtime /out-unfairplay ./public/unfairplay
 RUN npm run build
 
 # Compile the optional worker for the image architecture. It reuses the exact
@@ -30,9 +45,11 @@ RUN apk add --no-cache bash git python3 cmake build-base linux-headers pkgconf
 WORKDIR /app
 COPY runtime/ ./runtime/
 COPY --from=client-runtime /out/assets /public-assets
+COPY --from=client-runtime /unfairplay-source /unfairplay-source
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    ASSPP_PUBLIC_ASSETS=/public-assets bash runtime/native/build.sh /out linux-${TARGETARCH}
+    UNFAIRPLAY_SOURCE=/unfairplay-source ASSPP_PUBLIC_ASSETS=/public-assets \
+    bash runtime/native/build.sh /out linux-${TARGETARCH}
 
 FROM node:24-alpine AS backend-build
 RUN apk add --no-cache python3 make g++
@@ -52,6 +69,9 @@ COPY --from=frontend-build /app/frontend/dist ./public
 COPY --from=server-runtime /out/asspp-runtime-native ./server-runtime/asspp-runtime-native
 COPY --from=server-runtime /out/licenses ./server-runtime/licenses
 COPY --from=server-runtime /out/upstream-revision.txt ./server-runtime/upstream-revision.txt
+COPY --from=unfairplay-server-runtime /out-unfairplay-server/asspp-unfairplay ./server-runtime/asspp-unfairplay
+COPY --from=unfairplay-server-runtime /out-unfairplay-server/licenses ./server-runtime/licenses/unfairplay
+COPY --from=unfairplay-server-runtime /out-unfairplay-server/upstream-revision.txt ./server-runtime/unfairplay-revision.txt
 RUN mkdir -p /data/packages \
     && ln -s ../public/store-runtime/assets ./server-runtime/assets
 EXPOSE 8080
