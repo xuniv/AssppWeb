@@ -5,7 +5,7 @@ statically linked ARM64 interpreter. It needs no WebView, JIT entitlement,
 jailbreak, downloaded native library or authentication server. The optional
 private-server adapter invokes the same Linux executable once per operation.
 
-`build.sh OUTPUT TARGET` requires Go 1.26.5, CMake, Python 3, Git and a C compiler.
+`build.sh OUTPUT TARGET` requires Go 1.26.5, CMake, pkg-config, Python 3, Git and a C compiler.
 Apple targets require macOS and the selected Xcode SDK. Targets are
 `ios-arm64`, `ios-simulator-arm64`, `macos-arm64`, `macos-amd64`, `linux-amd64`
 and `linux-arm64`. Linux targets use a compiler matching the selected architecture and require

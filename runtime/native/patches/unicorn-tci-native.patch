@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 033db09..fcbb3c1 100644
+index 033db09..a86ab12 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -90,0 +91 @@ option(UNICORN_TRACER "Trace unicorn execution" OFF)
@@ -19,7 +19,13 @@ index 033db09..fcbb3c1 100644
 +        set(UNICORN_TARGET_ARCH "tci")
 +        set(EXTRA_CFLAGS "${EXTRA_CFLAGS}${CMAKE_C_FLAGS} -DCONFIG_TCG_INTERPRETER ")
 +    endif()
-@@ -505,0 +517 @@ set(UNICORN_ARCH_COMMON
+@@ -380,0 +392 @@ else()
++        RESULT_VARIABLE UC_CONFIGURE_RESULT
+@@ -382,0 +395,3 @@ else()
++    if(NOT UC_CONFIGURE_RESULT EQUAL 0)
++        message(FATAL_ERROR "QEMU configure failed (${UC_CONFIGURE_RESULT}); see its error above.")
++    endif()
+@@ -505,0 +521 @@ set(UNICORN_ARCH_COMMON
 +    $<$<STREQUAL:${UNICORN_TARGET_ARCH},tci>:qemu/tcg/tci.c>
 diff --git a/qemu/accel/tcg/translate-all.c b/qemu/accel/tcg/translate-all.c
 index 71b6b2b..65e07a1 100644

@@ -26,7 +26,7 @@ RUN npm run build
 # public images already packaged for the browser and contains no account state.
 FROM golang:1.26.5-alpine AS server-runtime
 ARG TARGETARCH
-RUN apk add --no-cache bash git python3 cmake build-base linux-headers
+RUN apk add --no-cache bash git python3 cmake build-base linux-headers pkgconf
 WORKDIR /app
 COPY runtime/ ./runtime/
 COPY --from=client-runtime /out/assets /public-assets
