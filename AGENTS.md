@@ -92,6 +92,8 @@ Browser/guest errors may expose only allowlisted error codes and numeric HTTP st
 
 The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/services/wsProxy.ts`:
 
+- `itunes.apple.com` — public storefront discovery before download version selection
+- `apps.apple.com` — public storefront and iOS catalog fallback
 - `s.mzstatic.com` — public SAP setup certificate
 - `fpinit.itunes.apple.com` — SAP setup exchange, browser TLS only
 - `auth.itunes.apple.com` — bag-resolved auth endpoint

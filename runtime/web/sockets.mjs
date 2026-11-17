@@ -2,6 +2,7 @@ const allowed = (host) =>
   /^(?:[a-z0-9-]+\.)*itunes\.apple\.com$/.test(host) ||
   /^(?:[a-z0-9-]+\.)*mzstatic\.com$/.test(host) ||
   [
+    'apps.apple.com',
     'gsa.apple.com',
     'www.apple.com',
     'updates.cdn-apple.com',

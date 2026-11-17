@@ -9,7 +9,9 @@ host does not replace these operations with legacy signed requests.
 By default, Go terminates Apple TLS inside the client without a hosted signer.
 Browser Wisp forwards encrypted TCP; the native app
 uses the native Go/C adapter and opens its own TCP connections. Both transports restrict
-destinations to approved Apple hosts on port 443. Mozilla public CA roots and
+destinations to approved Apple hosts on port 443. Download version selection also uses the pinned SDK’s public catalogs at
+`itunes.apple.com` and `apps.apple.com`; both must remain available through the
+Go transport and browser Wisp policy. Mozilla public CA roots and
 Apple Root CA are bundled, and certificate/hostname verification remains on.
 The OTA installer's separate device trust requirements remain unchanged.
 

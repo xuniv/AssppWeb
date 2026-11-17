@@ -16,12 +16,12 @@ func TestNativeTransportKeepsPinnedTrustAndDestinationPolicy(t *testing.T) {
 	if transport.Proxy != nil || transport.TLSClientConfig.RootCAs == nil || transport.TLSClientConfig.InsecureSkipVerify {
 		t.Fatal("native TLS policy changed")
 	}
-	for _, target := range []string{"example.com:443", "127.0.0.1:443", "gsa.apple.com:80", "gsa.apple.com:444", "gsa.apple.com.:443"} {
+	for _, target := range []string{"example.com:443", "127.0.0.1:443", "gsa.apple.com:80", "gsa.apple.com:444", "gsa.apple.com.:443", "apps.apple.com.evil.test:443", "apps.apple.com:80"} {
 		if _, err := dial(context.Background(), "tcp", target); err == nil {
 			t.Fatalf("accepted forbidden destination %q", target)
 		}
 	}
-	if !Allowed("gsa.apple.com") || !Allowed("p25-buy.itunes.apple.com") || Allowed("gsa.apple.com.example.com") {
+	if !Allowed("apps.apple.com") || !Allowed("itunes.apple.com") || !Allowed("gsa.apple.com") || !Allowed("p25-buy.itunes.apple.com") || Allowed("gsa.apple.com.example.com") {
 		t.Fatal("Apple host policy changed")
 	}
 }

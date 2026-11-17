@@ -27,7 +27,7 @@ var certificates []byte
 func Allowed(host string) bool {
 	return host == "itunes.apple.com" || strings.HasSuffix(host, ".itunes.apple.com") ||
 		host == "mzstatic.com" || strings.HasSuffix(host, ".mzstatic.com") ||
-		host == "gsa.apple.com" || host == "www.apple.com" || host == "updates.cdn-apple.com" || host == "mesu.apple.com" || host == "wkms-public.apple.com" || host == "fcs-keys-pub-prod.cdn-apple.com"
+		host == "apps.apple.com" || host == "gsa.apple.com" || host == "www.apple.com" || host == "updates.cdn-apple.com" || host == "mesu.apple.com" || host == "wkms-public.apple.com" || host == "fcs-keys-pub-prod.cdn-apple.com"
 }
 func await(promise js.Value) (js.Value, error) {
 	done := make(chan js.Value, 1)

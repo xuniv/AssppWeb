@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runStore } from '../../src/apple/storeRuntime';
+import { Authenticator } from '../../src/apple/authenticate';
+import { getDownloadInfo } from '../../src/apple/download';
+import { purchaseApp } from '../../src/apple/purchase';
+import { listVersions } from '../../src/apple/versionFinder';
+import { getVersionMetadata } from '../../src/apple/versionLookup';
+import type { Software } from '../../src/types';
 import { useAccountsStore } from '../../src/store/accounts';
 import { useSettingsStore } from '../../src/store/settings';
 import { serverRuntimeTransportAllowed } from '../../src/utils/runtimeTransport';
@@ -63,6 +69,64 @@ describe('explicit Store execution choice', () => {
         redirect: 'error',
       }),
     );
+  });
+
+  it('keeps every post-login Store operation on the server with the newest returned account state', async () => {
+    useSettingsStore.getState().setStoreRuntimeMode('server');
+    const operations: string[] = [];
+    const accountValue = {
+      email: 'catalog-flow@example.test',
+      passwordToken: 'synthetic-token',
+      directoryServicesIdentifier: '123',
+      storeFront: '143466-1,29',
+      pod: '25',
+    };
+    vi.mocked(fetch).mockImplementation(async (_url, init) => {
+      const request = JSON.parse(init!.body as string);
+      if (operations.length) {
+        expect(request.state.records.step).toBe(btoa(String(operations.length)));
+        expect(request.account).toMatchObject({
+          passwordToken: accountValue.passwordToken,
+          directoryServicesIdentifier: accountValue.directoryServicesIdentifier,
+          storeFront: '143466',
+          pod: '25',
+        });
+      }
+      operations.push(request.operation);
+      const values: Record<string, unknown> = {
+        login: accountValue,
+        purchase: {},
+        download: {
+          downloadURL: 'https://example.apple.com/synthetic.ipa',
+          sinfs: [{ id: 0, sinf: 'AA==' }],
+          bundleVersion: '1',
+          bundleShortVersionString: '1.0',
+        },
+        versions: { ExternalVersionIdentifiers: ['1', '2'] },
+        versionMetadata: { DisplayVersion: '1.0', ReleaseDate: '2026-01-01T00:00:00Z' },
+      };
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          value: values[request.operation],
+          state: { records: { step: btoa(String(operations.length)) }, cookies: [] },
+        }),
+      );
+    });
+    const account = await new Authenticator('020000000002').authenticate(accountValue.email, 'synthetic');
+    await useAccountsStore.getState().addAccount(account);
+    const app = { id: 123, bundleID: 'example.synthetic', name: 'Synthetic', version: '1.0', price: 0 } as Software;
+    try {
+      await purchaseApp(account, app);
+      await getDownloadInfo(account, app);
+      await listVersions(account, app);
+      await getVersionMetadata(account, app, '1');
+      expect(operations).toEqual(['login', 'purchase', 'download', 'versions', 'versionMetadata']);
+      expect(workers).toHaveLength(0);
+      expect(useAccountsStore.getState().accounts[0].runtimeState?.records.step).toBe(btoa('5'));
+    } finally {
+      await useAccountsStore.getState().removeAccount(account.email);
+    }
   });
 
   it('does not silently fall back to either transport after an error', async () => {

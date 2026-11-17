@@ -96,6 +96,8 @@ describe('Wisp Proxy', () => {
 
     it.each([
       ['init.itunes.apple.com', 'bag'],
+      ['itunes.apple.com', 'download storefront discovery'],
+      ['apps.apple.com', 'storefront and iOS catalog fallback'],
       ['buy.itunes.apple.com', 'auth and purchase'],
       ['p18-buy.itunes.apple.com', 'pod-routed store calls'],
       ['downloaddispatch.itunes.apple.com', 'failureType 5002 fallback'],
@@ -108,11 +110,15 @@ describe('Wisp Proxy', () => {
       expect(allows(host)).toBe(true);
     });
 
-    it.each(['example.com', 'itunes.apple.com.evil.test', 'notfpinit.itunes.apple.com', 's.mzstatic.com.evil.test'])(
-      'rejects %s',
-      (host) => {
-        expect(allows(host)).toBe(false);
-      },
-    );
+    it.each([
+      'example.com',
+      'itunes.apple.com.evil.test',
+      'notfpinit.itunes.apple.com',
+      's.mzstatic.com.evil.test',
+      'apps.apple.com.evil.test',
+      'notapps.apple.com',
+    ])('rejects %s', (host) => {
+      expect(allows(host)).toBe(false);
+    });
   });
 });
