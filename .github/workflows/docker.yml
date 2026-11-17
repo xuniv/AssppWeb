@@ -1,12 +1,20 @@
 name: Build and Push Docker Image
 
 on:
-  push:
-    branches: [main]
-    tags: ['v*']
-  # Lets the workflow be started by hand from the Actions tab, so an image can
-  # be rebuilt without pushing a commit.
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact reviewed source commit
+        required: true
+        type: string
+      publish:
+        description: Publish after verification succeeds
+        default: false
+        type: boolean
+
+concurrency:
+  group: verified-web-image
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -14,10 +22,21 @@ env:
 
 jobs:
   verify:
+    if: github.repository == 'xuniv/AssppWeb'
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
+      - name: Require the reviewed source revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          PUBLISH: ${{ inputs.publish }}
+        run: |
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          case "$EXPECTED_SHA" in *[!0-9a-f]*|'') exit 1;; esac
+          test "${#EXPECTED_SHA}" = 40
+          if [ "$PUBLISH" = true ]; then test "$GITHUB_REF" = refs/heads/main; fi
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -44,6 +63,8 @@ jobs:
           key: public-apple-macos27-26A434-arm64-v5
       - name: Build the client Store interpreter and public assets
         run: bash runtime/build.sh frontend/public/store-runtime
+      - name: Check isolated shared code and translated-code invalidation
+        run: node runtime/tests/code-invalidation.mjs
       - name: Check native asset decoding memory
         run: node runtime/tests/memory.mjs
       - name: Install Chromium and WebKit
@@ -54,7 +75,6 @@ jobs:
           BROWSERS: chromium,webkit
         run: node runtime/tests/browser.mjs frontend/public/store-runtime
       - name: Check verified Apple TLS and SAP through the actual Wisp server
-        if: github.event_name == 'workflow_dispatch' && !cancelled()
         env:
           BROWSERS: chromium,webkit
           LIVE_APPLE: '1'
@@ -65,10 +85,14 @@ jobs:
         working-directory: backend
       - run: npm test && npx tsc --noEmit && npm run build
         working-directory: frontend
+      - name: Check server-mode consent and cancellation in WebKit
+        run: node --import ./backend/node_modules/tsx/dist/loader.mjs runtime/tests/server-mode-webkit.mjs
 
   build:
+    if: inputs.publish && github.ref == 'refs/heads/main'
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     permissions:
       contents: read
       packages: write

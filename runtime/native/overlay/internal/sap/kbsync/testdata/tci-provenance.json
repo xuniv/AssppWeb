@@ -1,0 +1,34 @@
+{
+  "ipatoolRevision": "b352566155a667d8aaeabaa7ecec4966080f92ab",
+  "unicornRevision": "8028ec436f2d9376525352dd38ed9ed6b9f6be10",
+  "backend": "native TCI, ARM64 macOS27 public images",
+  "operation": "machine.GenerateKBSync",
+  "accounts": "invented DSIDs and hardware only, no network",
+  "packets": [
+    {
+      "name": "tci-one.bin",
+      "bytes": 212,
+      "sha256": "3465e92e5c0a641ca77b21f0b75b02f0668e4a0305da923668557bb69a02b042"
+    },
+    {
+      "name": "tci-u32max.bin",
+      "bytes": 212,
+      "sha256": "0f3a1d1df81c4a0ff7c908cfbc20c7bac1f5f43e547c110f52b1dc7a6ca7f635"
+    },
+    {
+      "name": "tci-u32plus.bin",
+      "bytes": 212,
+      "sha256": "de8a22bceaebabb1bacdeee7661776d8fbd50cf5c11f62d789a423a21eaa4f30"
+    },
+    {
+      "name": "tci-u64large.bin",
+      "bytes": 212,
+      "sha256": "bea7f47cdcd306938c3666592c56598cae2fbe54dba15f93a40ee74ff187f72e"
+    },
+    {
+      "name": "tci-zero-hardware.bin",
+      "bytes": 212,
+      "sha256": "a771168e1dde19bd9cacc9e74e1df30f9570649c79f75aaf244557e2c9b60b7e"
+    }
+  ]
+}

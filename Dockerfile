@@ -22,6 +22,18 @@ COPY frontend/ ./
 COPY --from=client-runtime /out ./public/store-runtime
 RUN npm run build
 
+# Compile the optional worker for the image architecture. It reuses the exact
+# public images already packaged for the browser and contains no account state.
+FROM golang:1.26.5-alpine AS server-runtime
+ARG TARGETARCH
+RUN apk add --no-cache bash git python3 cmake build-base linux-headers
+WORKDIR /app
+COPY runtime/ ./runtime/
+COPY --from=client-runtime /out/assets /public-assets
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    ASSPP_PUBLIC_ASSETS=/public-assets bash runtime/native/build.sh /out linux-${TARGETARCH}
+
 FROM node:24-alpine AS backend-build
 RUN apk add --no-cache python3 make g++
 WORKDIR /app/backend
@@ -37,7 +49,11 @@ COPY --from=backend-build /app/backend/dist ./dist
 COPY --from=backend-build /app/backend/node_modules ./node_modules
 COPY --from=backend-build /app/backend/package.json ./
 COPY --from=frontend-build /app/frontend/dist ./public
-RUN mkdir -p /data/packages
+COPY --from=server-runtime /out/asspp-runtime-native ./server-runtime/asspp-runtime-native
+COPY --from=server-runtime /out/licenses ./server-runtime/licenses
+COPY --from=server-runtime /out/upstream-revision.txt ./server-runtime/upstream-revision.txt
+RUN mkdir -p /data/packages \
+    && ln -s ../public/store-runtime/assets ./server-runtime/assets
 EXPOSE 8080
 ARG BUILD_COMMIT=unknown
 ARG BUILD_DATE=unknown

@@ -10,6 +10,9 @@ services:
       - PORT=8080
       # - DOWNLOAD_THREADS=8
       # - ACCESS_PASSWORD=your_password_here
+      # Optional account processing on this server; each browser must opt in.
+      # - SERVER_STORE_RUNTIME_ENABLED=false
+      # - SERVER_STORE_RUNTIME_CONCURRENCY=1
     restart: unless-stopped
     logging:
       driver: 'json-file'

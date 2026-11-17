@@ -15,15 +15,18 @@ import installRoutes from './routes/install.js';
 import settingsRoutes from './routes/settings.js';
 import bagRoutes from './routes/bag.js';
 import uploadRoutes from './routes/uploads.js';
+import storeRuntimeRoutes from './routes/storeRuntime.js';
 
 const app = express();
 
 // Middleware
 app.use(httpsRedirect);
+app.use('/api', accessAuth);
+// Private runtime requests have their own small parser and fixed parse errors.
+app.use('/api', storeRuntimeRoutes);
 app.use(express.json({ limit: '50mb' }));
 
 // API routes
-app.use('/api', accessAuth);
 app.use('/api', authRoutes);
 app.use('/api', searchRoutes);
 app.use('/api', downloadRoutes);

@@ -287,6 +287,14 @@
       "description": "Asspp Web — Appleアプリとライセンスの管理。",
       "buildCommit": "ビルドコミット",
       "buildDate": "ビルド日時"
+    },
+    "runtime": {
+      "consent": "このサーバーで Apple リクエストを処理",
+      "trust": "有効にすると、サーバー運営者はすべてのアカウントの Apple ID、パスワード、2 ファクタ認証コード、トークン、Cookie にアクセスできます。",
+      "unavailable": "このサーバーではサーバーモードを利用できません。デバイスでの処理は利用できます。",
+      "modeChanged": "Apple アカウントの処理方法が変更されました。もう一度お試しください。",
+      "serverFailed": "サーバーが Apple アカウントのリクエストを完了できませんでした。",
+      "httpsRequired": "サーバーモードを有効にするには、このサイトを HTTPS で開いてください。"
     }
   },
   "countries": {

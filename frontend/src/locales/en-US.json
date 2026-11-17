@@ -287,6 +287,14 @@
       "description": "Asspp Web — Apple app and license manager.",
       "buildCommit": "Build Commit",
       "buildDate": "Build Date"
+    },
+    "runtime": {
+      "consent": "Process Apple requests on this server",
+      "trust": "When on, this server’s operator can access your Apple ID, password, 2FA codes, tokens and cookies for all accounts.",
+      "unavailable": "Server mode is unavailable on this server. Device processing remains available.",
+      "modeChanged": "Apple account processing changed. Please try the request again.",
+      "serverFailed": "The server could not complete the Apple account request.",
+      "httpsRequired": "Open this site through HTTPS before enabling server mode."
     }
   },
   "countries": {

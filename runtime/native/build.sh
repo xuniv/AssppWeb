@@ -35,7 +35,7 @@ if [[ ! -f "$work/unicorn/.asspp-tci-patched" ]] || [[ "$(cat "$work/unicorn/.as
  git -C "$work/unicorn" reset -q --hard "$unicorn_revision"
  git -C "$work/unicorn" clean -q -fd
  git -C "$work/unicorn" checkout -q --detach FETCH_HEAD
- git -C "$work/unicorn" apply "$root/patches/unicorn-tci-native.patch"
+ git -C "$work/unicorn" apply --unidiff-zero "$root/patches/unicorn-tci-native.patch"
  printf '%s\n' "$patch_digest" > "$work/unicorn/.asspp-tci-patched"
 fi
 cmake_args=(-DUNICORN_TCI=ON -DUNICORN_ARCH=aarch64 -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DUNICORN_BUILD_TESTS=OFF -DUNICORN_INSTALL=OFF)
@@ -90,7 +90,10 @@ else
 fi
 mkdir -p "$output/include"
 cp "$root/AssppStoreRuntime.h" "$root/module.modulemap" "$output/include/"
-cp -R "$root/../licenses" "$output/licenses"
+mkdir -p "$output/licenses"
+cp -R "$root/../licenses/." "$output/licenses/"
+cp "$root/overlay/internal/sap/kbsync/LICENSE" "$output/licenses/apple-auth-MIT.txt"
+cp "$root/overlay/internal/sap/kbsync/NOTICE" "$output/licenses/KBSync-NOTICE.txt"
 printf '%s\n' "$revision" > "$output/upstream-revision.txt"
 # Reuse the existing public-asset build step; callers can reuse a previously prepared bundle.
 if [[ "${ASSPP_NATIVE_SKIP_ASSETS:-0}" == 1 ]]; then

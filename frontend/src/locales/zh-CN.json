@@ -287,6 +287,14 @@
       "description": "Asspp Web —— Apple 应用与许可证管理。",
       "buildCommit": "构建提交",
       "buildDate": "构建日期"
+    },
+    "runtime": {
+      "consent": "在此服务器上处理 Apple 请求",
+      "trust": "开启后，此服务器的运营者可访问所有账户的 Apple ID、密码、双重认证码、令牌和 Cookie。",
+      "unavailable": "此服务器不提供服务器模式。仍可在设备上处理请求。",
+      "modeChanged": "Apple 账户处理方式已更改，请重新发起请求。",
+      "serverFailed": "服务器未能完成 Apple 账户请求。",
+      "httpsRequired": "请通过 HTTPS 打开此网站后再启用服务器模式。"
     }
   },
   "countries": {

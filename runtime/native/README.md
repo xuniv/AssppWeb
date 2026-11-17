@@ -8,7 +8,8 @@ private-server adapter invokes the same Linux executable once per operation.
 `build.sh OUTPUT TARGET` requires Go 1.26.5, CMake, Python 3, Git and a C compiler.
 Apple targets require macOS and the selected Xcode SDK. Targets are
 `ios-arm64`, `ios-simulator-arm64`, `macos-arm64`, `macos-amd64`, `linux-amd64`
-and `linux-arm64`. Linux targets use a compiler matching the selected architecture.
+and `linux-arm64`. Linux targets use a compiler matching the selected architecture and require
+Linux UAPI headers (`linux-headers` on Alpine).
 
 The output contains `libAssppStoreRuntime.a`, `include/AssppStoreRuntime.h`, a
 Clang module map, compressed public `assets/`, revision and licenses. Linux also
@@ -30,7 +31,8 @@ to 8 MiB and responses to 12 MiB. Account records and cookies remain in the
 caller's state envelope and belong in Keychain in the native app.
 
 The Linux private-server command is `asspp-runtime-native --stdio /absolute/assets`.
-It reads one bounded request from stdin and writes one response to stdout. Its
+It reads one bounded request from stdin and writes one response to stdout, with
+a five-minute process deadline. Its
 stdout is protocol data and must never be copied into server logs.
 
 The native adapter reads each packaged image through bounded zlib decompression
@@ -53,3 +55,14 @@ On Linux it first verifies a seccomp control that rejects anonymous executable
 mappings and every `mprotect` adding execute, then runs all fixtures with those
 restrictions. It needs no Apple account or network. Apple simulator and device
 checks remain necessary before release; Linux timings do not predict iPhone speed.
+
+The Linux C ABI fixture uses glibc. Alpine deployments use the standalone
+executable, which is independently validated with musl.
+
+Native KBSync packet construction uses a source-derived pure-Go leaf pinned to
+apple-auth `98c862f7bebc8283a9b87f1578e703f0765dc81d` under MIT. It replaces
+only the default packet generator; account/device validation, download flow,
+cache policy and typed Store failures remain upstream. The original TCI machine
+entry remains available as an oracle. Offline fixtures verify the canonical
+macOS 27 packet MAC and record format plus independent C++ vectors; they do
+not establish Apple server acceptance. Source hashes and notices accompany it.

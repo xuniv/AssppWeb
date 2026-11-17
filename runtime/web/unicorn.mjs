@@ -119,6 +119,7 @@ export async function initializeUnicorn() {
         },
         start(a, b, count) {
           memory.seal();
+          memory.activate();
           // SAP uses wall-time limits and needs no JS callback per instruction.
           // The framework already has a broad validation hook: count there.
           // Keep a separate counter only for bounded synthetic/other engines.

@@ -19,7 +19,7 @@ export interface AuthRetry {
   delayMs: number;
 }
 
-/** Provisioning/2FA state stays on this client, including between code attempts. */
+/** Provisioning/2FA state is saved on this client between code attempts. */
 export class Authenticator {
   private state?: RuntimeState;
   private busy = false;

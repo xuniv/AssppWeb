@@ -18,15 +18,27 @@
 
 ## Architecture — Client Store runtime
 
-The server is a blind TCP proxy. It NEVER sees Apple credentials.
+Device processing is the default. In that mode the server is a blind TCP proxy
+and never sees Apple credentials. Optional server processing has a different
+trust model and requires the browser's explicit login-toggle consent before any
+credentials or account state are sent.
 
 - `runtime/` pins ipatool's modern ARM64 SAP, Store framework, Anisette, Store AMD and KBSync implementation. Read `runtime/README.md` before changing the protocol or the guest bridge.
-- The browser runs Go/WASM plus Unicorn's TCG interpreter in a Web Worker. Go terminates Apple TLS inside the worker. `runtime/web/sockets.mjs` carries encrypted TCP through Wisp; the backend never receives plaintext login, token or provisioning requests.
+- In device mode, the browser runs Go/WASM plus Unicorn's TCG interpreter in a Web Worker. Go terminates Apple TLS inside the worker. `runtime/web/sockets.mjs` carries encrypted TCP through Wisp; the backend never receives plaintext login, token or provisioning requests.
 - Account/provisioning records remain in client IndexedDB. The separate public-image database contains only immutable, hash-verified Apple images. Active SAP signer contexts are never persisted.
 - Build-time extraction obtains pinned public images from Apple's official restore CDN and packages compressed data with the app/image. Browsers decompress bounded images, verify their hashes in the Go loader, and cache them locally. Do not parse large restore images inside iOS WebContent processes.
-- The native Asspp app reuses this client runtime in its bundled WKWebView and opens TCP directly with Network.framework. It requires no hosted signer or authentication server.
+- The native Asspp app builds this shared protocol as a static Go/C library with an ARM64 TCI interpreter and direct approved Apple TCP connections. It requires no WebView, JIT or hosted authentication server.
 - After obtaining download information, the browser sends only the existing CDN URL, SINFs and iTunes metadata to the backend for IPA assembly. Keep credentials and runtime state out of these requests.
 - Keep TLS certificate/hostname verification enabled. The pinned public CA bundle includes Mozilla roots and Apple Root CA. Never add environment-specific proxy roots to published artifacts.
+
+### Optional server processing
+
+- `runtime/native/` builds the same pinned Store engine with static Unicorn TCI, including a one-operation Linux stdio worker. Docker bundles this worker and reuses the existing verified public assets. No browser/WASM runtime is started for server-mode requests.
+- The login screen has one explicit server-processing toggle, off by default, with a brief trust line: the server operator can access Apple ID/password/2FA, tokens, cookies and provisioning records for every account used in server mode. Never silently switch transports after a failure or transfer existing credentials merely because the server advertises this feature.
+- Only `/api/store-runtime` receives account state, after access auth and the versioned consent header. It uses its own 8 MiB parser before the general API parser. Keep uploads, IPA assembly and other routes free of account secrets.
+- Server execution uses one native child per operation, private stdin/stdout, no saved accounts, no raw logs and no inherited operator secrets/proxy settings. Enforce bounded concurrency, output, process duration and cancellation on disconnect. Never queue credential-bearing work on the server.
+- State returns to browser IndexedDB. The server sees it while processing; do not describe server mode as blind or zero trust. Both modes preserve the same modern protocol, typed failures, per-account GUID and verified Apple TLS with approved Apple destinations.
+- Require HTTPS for remote server-mode requests (explicit localhost/loopback is allowed for local use). Mode changes cancel current work and invalidate queued requests; no automatic fallback is allowed.
 
 ## Reference Implementation
 
@@ -130,7 +142,7 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - Vite for build tooling
 - IndexedDB for credential storage (via `idb`)
 - Store protocol and verified TLS execute in `runtime/`, loaded from `/store-runtime/store-runtime.js` in a dedicated worker.
-- `apple/storeRuntime.ts` serializes client state transactions and keeps provisioning state in IndexedDB. Backend HTTP endpoints never receive that state.
+- `apple/storeRuntime.ts` serializes state transactions and keeps provisioning state in IndexedDB. Only the explicitly selected server transport may send state to `/api/store-runtime`.
 - `Authenticator` is retained across 2FA submissions. Storefront and pod omissions retain the previous routing. Existing accounts should sign in again once after the runtime migration.
 - Keep the public-image IndexedDB cache separate from account records. Cache failures must not prevent authentication when the packaged public images remain available.
 - Plist build/parse (`frontend/src/apple/plist.ts`) uses native XML builder and browser-native `DOMParser`
@@ -175,7 +187,7 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 
 ### Account Hash Is Public
 
-`accountHash` is a SHA-256 of the account email. It is treated as **public, non-secret data** — it identifies which account owns a download but does not grant any privileged access. No authentication is bound to it. This is by design: the server is a blind proxy and does not manage user sessions.
+`accountHash` is a SHA-256 of the account email. It is treated as **public, non-secret data** — it identifies which account owns a download but does not grant any privileged access. No authentication is bound to it. The server does not manage Apple account sessions; optional Store processes receive explicitly authorized state per operation.
 
 ### Trusted Sources
 

@@ -287,6 +287,14 @@
       "description": "Asspp Web —— Apple 應用程式與授權管理。",
       "buildCommit": "構建提交",
       "buildDate": "構建日期"
+    },
+    "runtime": {
+      "consent": "在此伺服器上處理 Apple 請求",
+      "trust": "開啟後，此伺服器的營運者可存取所有帳號的 Apple ID、密碼、雙重認證碼、權杖及 Cookie。",
+      "unavailable": "此伺服器不提供伺服器模式。仍可在裝置上處理請求。",
+      "modeChanged": "Apple 帳號處理方式已變更，請重新發起請求。",
+      "serverFailed": "伺服器未能完成 Apple 帳號請求。",
+      "httpsRequired": "請透過 HTTPS 開啟此網站後再啟用伺服器模式。"
     }
   },
   "countries": {

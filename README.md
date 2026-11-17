@@ -4,15 +4,19 @@ A web-based tool for acquiring and installing iOS apps outside the App Store. Au
 
 ![preview](./resources/preview.png)
 
-## Zero-Trust Architecture
+## Apple account processing
 
-AssppWeb uses a zero-trust design where the server **never sees your Apple credentials**. All Apple API communication and verified TLS happen inside a browser Web Worker through the pinned Go/WebAssembly Store runtime. The server only acts as a blind TCP relay (Wisp protocol) and handles IPA compilation from public CDN downloads.
+By default, AssppWeb processes Apple account requests on your device. Apple API communication and verified TLS run inside a browser Web Worker through the pinned Go/WebAssembly Store runtime. In this mode, the server acts as a blind TCP relay (Wisp) and cannot read Apple credentials or account traffic.
 
-Authentication runs the modern ipatool ARM64 SAP and Store framework implementation in a WebAssembly interpreter, including Anisette, Store AMD and KBSync. No hosted authentication service is used. The first browser session downloads approximately 53 MB of compressed, pinned public Apple data; account and provisioning state stay in browser IndexedDB. Existing accounts should sign in again once after upgrading.
+Authentication uses the modern ipatool ARM64 SAP and Store framework implementation, including Anisette, Store AMD and KBSync. Device processing downloads approximately 53 MB of compressed, pinned public Apple data on its first use. Account and provisioning state are saved in browser IndexedDB.
+
+For Safari devices with limited memory, the login screen offers a single **Process Apple requests on this server** toggle. It is off by default; turning it on explicitly allows this AssppWeb server to process account requests. The choice is saved for later requests, including downloads. **The server operator can access your Apple ID, password, 2FA codes, tokens, cookies and provisioning records for every account used in this mode.** It runs the same pinned engine natively and does not load the browser runtime. Each server process handles one request and exits; account state is returned to the browser rather than saved on the server. Errors never trigger an automatic switch between modes.
+
+Use server mode only on your own server or one whose operator you trust. It requires HTTPS for remote access; local loopback access is permitted. The Docker image includes the worker and verified assets. Operators can disable it with `SERVER_STORE_RUNTIME_ENABLED=false`; its default concurrency is one, with no server queue, an 8 MiB request cap and a five-minute process deadline. Configure your reverse proxy's request timeout accordingly and set `ACCESS_PASSWORD` when access should be restricted.
 
 See [the client runtime](runtime/README.md) for pinned source revisions, public-asset hashes, licenses and rebuild instructions. Native Asspp uses the same interpreter inside the app without a self-hosted server.
 
-> **⚠️ Important Security Notice:** There are no official Asspp Web instances. Use any public instance at your own risk. While the backend cannot read your encrypted traffic, a malicious host could serve a modified frontend to capture your credentials before encryption. Therefore, **do not blindly trust public instances**. We strongly recommend self-hosting your own instance or using one provided by a trusted partner. Always verify the SSL certificate and ensure you are connecting to a secure, authentic endpoint.
+> **⚠️ Important Security Notice:** There are no official Asspp Web instances. In device mode, a malicious host could still serve a modified frontend that captures credentials before encryption. In server mode, the operator receives account credentials by design. Self-host or use an operator you trust, and verify the site's HTTPS certificate.
 
 **恳请所有转发项目的博主对自己的受众进行网络安全技术科普。要有哪个不拎清的大头儿子搞出事情来都够我们喝一壶的。**
 
@@ -101,6 +105,9 @@ docker compose up -d
 | `MAX_DOWNLOAD_MB`                           | `0`             | Reject downloads exceeding this size in MB to prevent out-of-memory errors (0 to disable)   |
 | `DOWNLOAD_THREADS`                          | `8`             | Number of parallel threads for IPA downloads (1–32)                                         |
 | `ACCESS_PASSWORD`                           | _(none)_        | Require a password to access the web UI and API (empty to disable)                          |
+| `SERVER_STORE_RUNTIME_ENABLED`              | `true`          | Offer optional server account processing; browsers must explicitly opt in                   |
+| `SERVER_STORE_RUNTIME_CONCURRENCY`          | `1`             | Maximum native account processes (1–4); excess requests receive 503                         |
+| `SERVER_STORE_RUNTIME_TIMEOUT_MS`           | `300000`        | Native process deadline, bounded to 30–300 seconds                                          |
 
 **Reverse Proxy (Required for Install Apps on iOS)**
 
@@ -116,7 +123,7 @@ asspp.example.com { reverse_proxy 127.0.0.1:8080 }
 
 **⚠️ Make Sure WebSocket Works**
 
-AssppWeb relies on the Wisp protocol over WebSocket (`/wisp/`) for its zero-trust architecture. Ensure your reverse proxy or CDN (e.g., Nginx, Cloudflare) is configured to allow WebSocket connections, otherwise the app will fail to communicate with Apple servers.
+Device processing uses the Wisp protocol over WebSocket (`/wisp/`). Ensure your reverse proxy or CDN (e.g., Nginx, Cloudflare) allows WebSocket connections for this mode. Server processing uses ordinary same-origin HTTPS requests.
 
 </details>
 

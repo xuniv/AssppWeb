@@ -105,3 +105,9 @@ text = text.replace(needle, '''engine.SetDispatchSource(func() ([]uint64, [][2]u
     })
     '''+needle)
 path.write_text(text)
+
+p = destination / 'internal/storeauth/anisette.go'
+s = p.read_text()
+start = s.index('\tif isUnknownAuthority(err) {')
+end = s.index('\tif err != nil {', start)
+p.write_text(s[:start] + s[end:])

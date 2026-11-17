@@ -8,6 +8,7 @@ describe('store/settings', () => {
     useSettingsStore.setState({
       defaultCountry: 'US',
       defaultEntity: 'iPhone',
+      storeRuntimeMode: 'client',
     });
   });
 
@@ -29,5 +30,13 @@ describe('store/settings', () => {
   it('should update default entity', () => {
     useSettingsStore.getState().setDefaultEntity('iPad');
     expect(useSettingsStore.getState().defaultEntity).toBe('iPad');
+  });
+
+  it('requires explicit opt-in for server account processing', () => {
+    expect(useSettingsStore.getState().storeRuntimeMode).toBe('client');
+    useSettingsStore.getState().setStoreRuntimeMode('server');
+    expect(useSettingsStore.getState().storeRuntimeMode).toBe('server');
+    useSettingsStore.getState().setStoreRuntimeMode('client');
+    expect(useSettingsStore.getState().storeRuntimeMode).toBe('client');
   });
 });

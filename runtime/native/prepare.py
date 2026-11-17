@@ -24,6 +24,17 @@ shutil.rmtree(destination / 'pkg/keychain')
 (destination / 'pkg/keychain/keychain.go').write_text('package keychain\ntype Keychain interface { Get(string)([]byte,error);Set(string,[]byte)error;Remove(string)error }\n')
 p = destination / 'pkg/appstore/appstore_revoke.go'
 p.write_text(p.read_text().replace('"github.com/byteness/keyring"', '').replace('errors.Is(cacheErr, keyring.ErrKeyNotFound) || ', ''))
+# Native state stores use the standard missing-file sentinel rather than an OS
+# keyring provider. Keep upstream cache/revoke fixtures on that same interface.
+for name in ['appstore_kbsync_cache_test.go','appstore_revoke_test.go']:
+    p=destination / 'pkg/appstore' / name
+    s=p.read_text().replace('"github.com/byteness/keyring"','')
+    if '"io/fs"' not in s:
+        s=s.replace('"errors"','"errors"\n"io/fs"')
+    s=s.replace('keyring.ErrKeyNotFound','fs.ErrNotExist')
+    s=s.replace('Entry("native keychain",','Entry("runtime state keychain",')
+    p.write_text(s)
+
 
 # Use only verified packaged images. Never download/extract restore images in the app.
 assets = destination / 'internal/sap/assets'
@@ -116,4 +127,18 @@ s=p.read_text()
 start=s.index('\tif isUnknownAuthority(err) {')
 end=s.index('\tif err != nil {',start)
 s=s[:start]+s[end:]
+p.write_text(s)
+
+# Native packet construction is independent of guest loading. Keep the original
+# machine.GenerateKBSync implementation available as the pinned TCI oracle.
+p=destination / 'pkg/appstore/appstore_kbsync.go'
+s=p.read_text()
+start=s.index('func defaultKBSyncGenerator(')
+end=s.index('\nfunc (t *appstore) sendPreferredDownload',start)
+s=s[:start]+"""func defaultKBSyncGenerator(ctx context.Context, hardwareID []byte, dsid uint64) ([]byte, error) {
+    return nativeKBSyncGenerator(ctx,hardwareID,dsid)
+}
+"""+s[end:]
+s=s.replace('\t"github.com/majd/ipatool/v2/internal/sap/assets"\n','')
+s=s.replace('\t"github.com/majd/ipatool/v2/internal/sap/machine"\n','')
 p.write_text(s)

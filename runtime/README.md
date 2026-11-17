@@ -1,14 +1,14 @@
 # Client Store runtime
 
 This adapter runs ipatool revision
-`b352566155a667d8aaeabaa7ecec4966080f92ab` inside the browser or the app's local
-WKWebView. It reuses the macOS 27 ARM64 SAP, framework request engine, Anisette,
+`b352566155a667d8aaeabaa7ecec4966080f92ab` inside the browser or the app's native
+Go/C runtime. It reuses the macOS 27 ARM64 SAP, framework request engine, Anisette,
 Store AMD provisioning, KBSync and entitlement download implementation. The
 host does not replace these operations with legacy signed requests.
 
-No authentication HTTP endpoint or hosted signer is used. Go terminates Apple
-TLS inside the client. Browser Wisp forwards encrypted TCP; the native app
-opens its own TCP connections with Network.framework. Both transports restrict
+By default, Go terminates Apple TLS inside the client without a hosted signer.
+Browser Wisp forwards encrypted TCP; the native app
+uses the native Go/C adapter and opens its own TCP connections. Both transports restrict
 destinations to approved Apple hosts on port 443. Mozilla public CA roots and
 Apple Root CA are bundled, and certificate/hostname verification remains on.
 The OTA installer's separate device trust requirements remain unchanged.
@@ -27,7 +27,19 @@ system. Preparing images at build time avoids parsing a large restore image
 inside a memory-limited iOS WebContent process. Verified images may persist in
 browser IndexedDB or the app's public-asset cache.
 Account records, cookies and provisioning state return to client IndexedDB or
-Keychain. They never enter the public-image cache, server files or logs.
+Keychain. They never enter the public-image cache, server files or logs. Explicit
+server mode temporarily transfers this state to the selected server process.
+
+The optional server mode in `native/` builds this same pinned engine with static
+Unicorn TCI. A Linux worker accepts one bounded JSON operation on stdin and
+returns the existing response shape on stdout, then exits. It uses only packaged
+hash-verified Apple assets, the published public CA bundle and approved Apple
+destinations. It does not inherit environment proxy or custom root settings.
+`backend/src/routes/storeRuntime.ts` exposes it only through the explicitly
+consented same-origin server transport. The server can access all credentials
+and state during this mode, even though it never saves accounts. Device mode
+remains the default; there is no automatic fallback. See the main README for
+the trust choice and limits.
 
 `build.sh OUTPUT` needs Go 1.26.5, Python 3, Git and esbuild. It downloads the
 exact upstream revision, applies the checked-in adapters, removes unused OS
@@ -49,8 +61,8 @@ This allows framework callbacks to await network I/O without a blocked JS/WASM
 call stack. Ordinary Store instructions stay in the JS address-policy check;
 only bridge calls cross into Go. Guest instruction/time limits remain enforced.
 
-Public images stream into Go through 64 KiB reads, rather than being kept as a
-second complete JS filesystem copy. Native IPC uses the same bounded chunks.
+Browser public images stream into Go through 64 KiB reads, rather than being kept as a
+second complete JS filesystem copy. The native runtime reads its packaged files directly.
 Each closed image releases temporary Go/JS handles and yields before the next
 image loads, bounding startup buffers as well as emulation memory.
 The reader also collects external staging handles every 4 MiB during large

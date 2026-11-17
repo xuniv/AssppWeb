@@ -1,0 +1,17 @@
+Native KBSync interoperability research
+
+Port derived from apple-auth/apple-auth v0.1.3, commit
+98c862f7bebc8283a9b87f1578e703f0765dc81d (2026-11-02).
+https://github.com/apple-auth/apple-auth/tree/98c862f7bebc8283a9b87f1578e703f0765dc81d
+
+Copyright (c) 2026 yummy1gay. MIT license reproduced in LICENSE.
+Source modules: src/store/kbsync/*.hpp, src/store/data/{arithmetic,codecs,
+keys,packet,prehash,prehash_maps,record}.hpp and src/data_mask.hpp.
+
+The Go standard library supplies AES, CBC, MD5, SHA-1, HMAC, random input,
+constant-time MAC comparison and serialization. The recovered prehash tables
+and arithmetic remain source-derived and hash-pinned; no Apple executable,
+interpreter, JIT, native library, HTTP client or account state is included.
+
+Tests use invented DSIDs/hardware and public deterministic arithmetic only.
+Compatibility evidence is offline. No Apple account or server acceptance claim.

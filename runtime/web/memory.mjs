@@ -47,7 +47,8 @@ export function sharedMemory(uc) {
       const handle = uc.getValue(engine.handle_ptr, '*');
       const blocks = new Set(),
         buckets = new Map();
-      let sealed = false;
+      let sealed = false,
+        active = false;
       const put = (block) => {
         blocks.add(block);
         const key = block.begin >> 16n;
@@ -64,12 +65,13 @@ export function sharedMemory(uc) {
       const find = (address) =>
         [...(buckets.get(address >> 16n) ?? [])].find((b) => address >= b.begin && address < b.end);
       const attach = (block, backing, readonly) => {
-        check(uc._uc_mem_map_ptr(handle, block.begin, BigInt(block.size), readonly ? 5 : 7, backing.pointer));
+        if (active)
+          check(uc._uc_mem_map_ptr(handle, block.begin, BigInt(block.size), readonly ? 5 : 7, backing.pointer));
         block.backing = backing;
         block.readonly = readonly;
       };
       const replace = (block, backing, readonly) => {
-        check(uc._uc_mem_unmap(handle, block.begin, BigInt(block.size)));
+        if (active) check(uc._uc_mem_unmap(handle, block.begin, BigInt(block.size)));
         const previous = block.backing;
         attach(block, backing, readonly);
         release(previous);
@@ -79,7 +81,13 @@ export function sharedMemory(uc) {
         for (let at = address; at < end; ) {
           const block = find(at);
           if (!block) return false;
-          if (!block.backing) attach(block, zero, true);
+          if (!block.backing) {
+            if (writable) {
+              const backing = allocate(block.size);
+              uc.heapBytes().fill(0, backing.pointer, backing.pointer + block.size);
+              attach(block, backing, false);
+            } else attach(block, zero, true);
+          }
           if (writable && block.readonly) {
             const next = allocate(block.size);
             uc.heapBytes().copyWithin(next.pointer, block.backing.pointer, block.backing.pointer + block.size);
@@ -137,7 +145,7 @@ export function sharedMemory(uc) {
               }
               put(part);
             }
-            if (block.backing) check(uc._uc_mem_unmap(handle, block.begin, BigInt(block.size)));
+            if (active && block.backing) check(uc._uc_mem_unmap(handle, block.begin, BigInt(block.size)));
             erase(block);
             for (const part of [...blocks]) {
               if (part.backing && remaining.some(([a, b]) => part.begin === a && part.end === b)) {
@@ -172,8 +180,20 @@ export function sharedMemory(uc) {
         },
         write(address, bytes) {
           if (!ensure(address, bytes.length, true)) throw new Error('Write outside guest region');
-          // uc_mem_write invalidates translated code; direct heap writes would
-          // leave stale instructions after a guest code patch.
+          // Before activation, no instructions have run and no TCG blocks exist.
+          // Populate the backing directly during initial image loading.
+          if (!active) {
+            for (let at = address, copied = 0; copied < bytes.length; ) {
+              const block = find(at),
+                offset = Number(at - block.begin),
+                count = Math.min(bytes.length - copied, block.size - offset);
+              uc.heapBytes().set(bytes.subarray(copied, copied + count), block.backing.pointer + offset);
+              at += BigInt(count);
+              copied += count;
+            }
+            return;
+          }
+          // Once execution may have begun, invalidate translated guest code.
           engine.mem_write(address, bytes);
         },
         seal() {
@@ -193,10 +213,15 @@ export function sharedMemory(uc) {
               backing.key = key;
               if (!cache.has(key)) cache.set(key, new Set());
               cache.get(key).add(backing);
-              check(uc._uc_mem_protect(handle, block.begin, BigInt(block.size), 5));
+              if (active) check(uc._uc_mem_protect(handle, block.begin, BigInt(block.size), 5));
               block.readonly = true;
             }
           }
+        },
+        activate() {
+          if (active) return;
+          active = true;
+          for (const block of blocks) if (block.backing) attach(block, block.backing, block.readonly);
         },
         close() {
           for (const block of blocks) release(block.backing);

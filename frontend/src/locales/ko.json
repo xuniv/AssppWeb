@@ -287,6 +287,14 @@
       "description": "Asspp Web — Apple 앱·라이선스 관리.",
       "buildCommit": "빌드 커밋",
       "buildDate": "빌드 날짜"
+    },
+    "runtime": {
+      "consent": "이 서버에서 Apple 요청 처리",
+      "trust": "켜면 이 서버 운영자가 모든 계정의 Apple ID, 암호, 이중 인증 코드, 토큰 및 쿠키에 접근할 수 있습니다.",
+      "unavailable": "이 서버에서는 서버 모드를 사용할 수 없습니다. 기기에서 계속 처리할 수 있습니다.",
+      "modeChanged": "Apple 계정 처리 방식이 변경되었습니다. 요청을 다시 시도하세요.",
+      "serverFailed": "서버가 Apple 계정 요청을 완료하지 못했습니다.",
+      "httpsRequired": "서버 모드를 활성화하려면 HTTPS로 이 사이트를 여세요."
     }
   },
   "countries": {

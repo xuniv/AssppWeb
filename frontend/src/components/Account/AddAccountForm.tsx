@@ -1,12 +1,15 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PageContainer from '../Layout/PageContainer';
 import Spinner from '../common/Spinner';
 import { useAccounts } from '../../hooks/useAccounts';
+import { useSettingsStore } from '../../store/settings';
 import { useToastStore } from '../../store/toast';
 import { Authenticator, AuthenticationError } from '../../apple/authenticate';
+import { apiGet } from '../../api/client';
 import { getErrorMessage } from '../../utils/error';
+import { serverRuntimeTransportAllowed } from '../../utils/runtimeTransport';
 import { generateDeviceId } from '../../apple/config';
 import type { AuthRetry } from '../../apple/authenticate';
 
@@ -15,6 +18,9 @@ export default function AddAccountForm() {
   const { addAccount } = useAccounts();
   const { t } = useTranslation();
   const addToast = useToastStore((s) => s.addToast);
+  const { storeRuntimeMode, setStoreRuntimeMode } = useSettingsStore();
+  const [serverRuntimeAvailable, setServerRuntimeAvailable] = useState<boolean | null>(null);
+  const serverTransportAllowed = serverRuntimeTransportAllowed();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,6 +32,20 @@ export default function AddAccountForm() {
   const [retry, setRetry] = useState<AuthRetry | null>(null);
   const inputClassName =
     'block min-h-11 w-full min-w-0 max-w-full rounded-xl border-0 bg-gray-100 px-3 py-2 text-base text-gray-900 focus:ring-2 focus:ring-blue-500/40 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-gray-800 dark:text-white';
+
+  useEffect(() => {
+    let active = true;
+    apiGet<{ serverStoreRuntimeAvailable?: boolean }>('/api/settings')
+      .then((settings) => {
+        if (active) setServerRuntimeAvailable(settings.serverStoreRuntimeAvailable === true);
+      })
+      .catch(() => {
+        if (active) setServerRuntimeAvailable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,6 +138,47 @@ export default function AddAccountForm() {
                 </button>
               </div>
               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('accounts.addForm.deviceIdHelp')}</p>
+            </div>
+
+            <div>
+              <label className="flex min-h-11 items-center justify-between gap-4 text-sm font-medium text-gray-700 dark:text-gray-300">
+                <span>{t('settings.runtime.consent')}</span>
+                <span className="relative inline-flex shrink-0">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={storeRuntimeMode === 'server'}
+                    disabled={storeRuntimeMode !== 'server' && (!serverRuntimeAvailable || !serverTransportAllowed)}
+                    onChange={(event) => {
+                      setStoreRuntimeMode(event.target.checked ? 'server' : 'client');
+                      authenticator.current = null;
+                      setNeedsCode(false);
+                      setCode('');
+                      setRetry(null);
+                    }}
+                    aria-describedby="server-runtime-trust server-runtime-availability"
+                    className="peer sr-only"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="h-6 w-11 rounded-full bg-gray-300 transition-colors peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500 peer-focus-visible:ring-offset-2 peer-disabled:opacity-50 dark:bg-gray-700"
+                  />
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5"
+                  />
+                </span>
+              </label>
+              <p id="server-runtime-trust" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t('settings.runtime.trust')}
+              </p>
+              <p id="server-runtime-availability" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {!serverTransportAllowed
+                  ? t('settings.runtime.httpsRequired')
+                  : serverRuntimeAvailable === false
+                    ? t('settings.runtime.unavailable')
+                    : null}
+              </p>
             </div>
 
             {needsCode && (

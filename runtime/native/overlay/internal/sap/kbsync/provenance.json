@@ -1,0 +1,18 @@
+{
+  "upstream": "https://github.com/apple-auth/apple-auth",
+  "revision": "98c862f7bebc8283a9b87f1578e703f0765dc81d",
+  "license": "MIT",
+  "files": {
+    "kbsync.go": "d95e68c6fa716b4b2635ebc19680d19497e829e1df22ee5959455e35171ecc06",
+    "kernel_generated.go": "8e14471c19e1bb88f0d3609be1486c9f887b2361f7bacac26c8da8cae28ec3e9",
+    "tables_generated.go": "9d49ac636c995d02b50a8e892d6b1f2a764e72d62f1d5ca77bc4091659a2d36b",
+    "LICENSE": "5c0dcb58d2bd918e927bb41bb5ca2789cf9778fcaec0ce2892846cd72997f5ba",
+    "NOTICE": "bccd06caef1f881d13b4f80a2885df6a4cf345b384f74744289ba4b317299232"
+  },
+  "offlineChecks": {
+    "canonicalTCIMacAndRecordFormat": 5,
+    "exactCppPackets": 64,
+    "freshGoPacketsAcceptedByCpp": 64
+  },
+  "appleServerAcceptance": "not tested"
+}

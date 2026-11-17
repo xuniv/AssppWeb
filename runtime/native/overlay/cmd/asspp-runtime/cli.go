@@ -5,11 +5,14 @@ import (
 	"github.com/majd/ipatool/v2/internal/sap/assets"
 	"io"
 	"os"
+	"time"
 )
 
 // One operation per process for the explicitly configured private server mode.
 // Protocol data goes only to stdout; errors use the same fixed-code JSON envelope.
 func runCLI() {
+	deadline := time.AfterFunc(5*time.Minute, func() { os.Exit(124) })
+	defer deadline.Stop()
 	failure := func(code string) { _ = json.NewEncoder(os.Stdout).Encode(response{Error: code}) }
 	if len(os.Args) != 3 || os.Args[1] != "--stdio" {
 		failure("invalid_request")

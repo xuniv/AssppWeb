@@ -1,6 +1,10 @@
 import { getAccessToken } from '../components/Auth/PasswordGate';
 import { useAccountsStore } from '../store/accounts';
 import { useRuntimeStore } from '../store/runtime';
+import { useSettingsStore, type StoreRuntimeMode } from '../store/settings';
+import { authHeaders } from '../api/client';
+import { serverRuntimeTransportAllowed } from '../utils/runtimeTransport';
+import i18n from '../i18n';
 import type { Account, Software } from '../types';
 
 export interface RuntimeState {
@@ -42,6 +46,8 @@ const jobs = new Map<
 >();
 const states = new Map<string, RuntimeState>();
 const epochs = new Map<string, number>();
+const serverRequests = new Set<AbortController>();
+let transportEpoch = 0;
 
 function stop() {
   worker?.terminate();
@@ -51,6 +57,8 @@ function stop() {
     job.reject(new Error('Store runtime stopped'));
   }
   jobs.clear();
+  for (const controller of serverRequests) controller.abort();
+  serverRequests.clear();
   useRuntimeStore.getState().setStage('');
 }
 function getWorker(): Worker {
@@ -89,7 +97,41 @@ function getWorker(): Worker {
   value.postMessage({ type: 'initialize', wispURL: url.href });
   return value;
 }
-function exchange(input: string): Promise<string> {
+async function exchange(input: string, mode: StoreRuntimeMode, epoch: number): Promise<string> {
+  // Consent is rechecked immediately before transfer, including queued work.
+  // A mode change never moves an in-flight login or retry to another machine.
+  if (useSettingsStore.getState().storeRuntimeMode !== mode || epoch !== transportEpoch) {
+    throw new Error(i18n.t('settings.runtime.modeChanged'));
+  }
+  if (mode === 'server') {
+    if (!serverRuntimeTransportAllowed()) throw new Error(i18n.t('settings.runtime.httpsRequired'));
+    const controller = new AbortController();
+    serverRequests.add(controller);
+    useRuntimeStore.getState().setStage('running');
+    const timer = setTimeout(() => controller.abort(), 5 * 60 * 1000 + 5000);
+    try {
+      const result = await fetch('/api/store-runtime', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Asspp-Server-Consent': 'credentials-v1',
+          ...authHeaders(),
+        },
+        body: input,
+        signal: controller.signal,
+        cache: 'no-store',
+        redirect: 'error',
+      });
+      if (!result.ok) {
+        throw new Error(`${i18n.t('settings.runtime.serverFailed')} (HTTP ${result.status})`);
+      }
+      return await result.text();
+    } finally {
+      clearTimeout(timer);
+      serverRequests.delete(controller);
+      useRuntimeStore.getState().setStage('');
+    }
+  }
   return new Promise((resolve, reject) => {
     const id = next++;
     const target = getWorker();
@@ -98,6 +140,13 @@ function exchange(input: string): Promise<string> {
     target.postMessage({ type: 'run', id, input });
   });
 }
+
+useSettingsStore.subscribe((current, previous) => {
+  if (current.storeRuntimeMode !== previous.storeRuntimeMode) {
+    transportEpoch++;
+    stop();
+  }
+});
 export function forgetRuntimeAccount(email: string) {
   epochs.set(email, (epochs.get(email) ?? 0) + 1);
   for (const key of states.keys()) if (key.startsWith(`${email}\0`)) states.delete(key);
@@ -106,6 +155,8 @@ export function currentRuntimeState(email: string, deviceID: string): RuntimeSta
   return states.get(`${email}\0${deviceID}`);
 }
 export function runStore<T>(request: Request): Promise<RuntimeResponse<T>> {
+  const mode = useSettingsStore.getState().storeRuntimeMode;
+  const requestTransportEpoch = transportEpoch;
   const job = queue.then(async () => {
     const email = request.email ?? request.account?.email ?? '';
     const key = `${email}\0${request.deviceID}`;
@@ -114,7 +165,9 @@ export function runStore<T>(request: Request): Promise<RuntimeResponse<T>> {
       .getState()
       .accounts.find((account) => account.email === email && account.deviceIdentifier === request.deviceID);
     const state = states.get(key) ?? request.state ?? stored?.runtimeState;
-    const result = JSON.parse(await exchange(JSON.stringify({ ...request, state }))) as RuntimeResponse<T>;
+    const result = JSON.parse(
+      await exchange(JSON.stringify({ ...request, state }), mode, requestTransportEpoch),
+    ) as RuntimeResponse<T>;
     if ((epochs.get(email) ?? 0) !== epoch) throw new Error('Account removed during the request');
     if (result.state?.records) {
       states.set(key, result.state);
