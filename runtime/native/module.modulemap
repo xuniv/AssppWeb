@@ -1,0 +1,4 @@
+module AssppStoreRuntime {
+  header "AssppStoreRuntime.h"
+  export *
+}
