@@ -186,9 +186,22 @@ try {
         },
         { liveApple, provisioning },
       );
-      console.log(JSON.stringify({ browser: name, peakContentKiB, ...output }));
+      console.log(
+        JSON.stringify({
+          browser: name,
+          peakContentKiB,
+          results: output.results.map(({ operation, result }) => ({
+            operation,
+            ok: result.ok === true,
+            status: Number.isInteger(result.status) && result.status >= 100 && result.status <= 599 ? result.status : 0,
+          })),
+          statistics: output.statistics,
+          writes: output.writes,
+          bytes: output.bytes,
+        }),
+      );
       for (const item of output.results) {
-        assert.equal(item.result.ok, true, `${name} ${item.operation}: ${item.result.error}`);
+        assert.equal(item.result.ok, true, `${name} ${item.operation} failed`);
         if (item.operation === 'anisette-preflight') assert.equal(item.result.value.proofReady, true);
       }
       assert.equal(output.writes, 0);

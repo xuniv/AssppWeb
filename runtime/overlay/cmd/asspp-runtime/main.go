@@ -260,7 +260,7 @@ func execute(input string) (result response) {
 		}
 		result.OK = err == nil
 		if err != nil {
-			result.Error = err.Error()
+			result.Error = failureCode(err)
 		}
 		return result
 	}
